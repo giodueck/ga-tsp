@@ -6,11 +6,11 @@
     http://comopt.ifi.uni-heidelberg.de/software/TSPLIB95/tsp95.pdf
 */
 
-typedef struct tsp_2d_node_t {
+typedef struct {
     double x, y;
 } tsp_2d_node_t;
 
-typedef struct tsp_2d_t {
+typedef struct {
     size_t dim;
     tsp_2d_node_t *nodes;
 } tsp_2d_t;

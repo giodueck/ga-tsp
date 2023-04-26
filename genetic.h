@@ -7,8 +7,8 @@
 */
 
 /* Solution format */
-typedef struct ga_solution_t {
-    size_t chrom_len;
+typedef struct {
+    size_t chrom_len;   // length in whatever datatype
     char dead, elite;
     unsigned int generation, fitness, last_fitness;
     void *chromosome;
