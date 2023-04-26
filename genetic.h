@@ -7,7 +7,7 @@
 */
 
 /* Solution format */
-typedef struct ga_solution {
+typedef struct ga_solution_t {
     size_t chrom_len;
     char dead, elite;
     unsigned int generation, fitness, last_fitness;
@@ -33,11 +33,10 @@ void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, 
 
 // Creates the next generation by replacing dead solutions
 // mutation_chance works as a 1 in n. E.g. 1 in a billion
-// mutation_func must be able to handle cases where the parent and offspring are the same solution
 // O(size)
-void ga_next_generation(ga_solution_t *pop, size_t size, size_t chrom_len, int percent_dead,
+void ga_next_generation(ga_solution_t *pop, size_t size, int percent_dead,
                         int percent_cross, void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                        int mutation_chance, void (*mutation_func)(ga_solution_t *, size_t));
+                        int mutation_chance, void (*mutation_func)(ga_solution_t *));
 
 // Retrieves some fitness information about the population
 // O(size)

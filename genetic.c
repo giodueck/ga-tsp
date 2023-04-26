@@ -62,9 +62,9 @@ void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, 
 // Creates the next generation by replacing dead solutions
 // mutation_chance works as a 1 in n. E.g. 1 in a billion
 // O(size)
-void ga_next_generation(ga_solution_t *pop, size_t size, size_t chrom_len, int percent_dead,
+void ga_next_generation(ga_solution_t *pop, size_t size, int percent_dead,
                         int percent_cross, void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                        int mutation_chance, void (*mutation_func)(ga_solution_t *, size_t))
+                        int mutation_chance, void (*mutation_func)(ga_solution_t *))
 {
     size_t threshold = size * percent_dead / 100;
     size_t cross = size * percent_cross / 100;
@@ -82,12 +82,12 @@ void ga_next_generation(ga_solution_t *pop, size_t size, size_t chrom_len, int p
         {
             int _i = rand() % threshold;
             memcpy(&(pop[i]), &(pop[_i]), sizeof(ga_solution_t) - sizeof(void *));
-            memcpy(pop[i].chromosome, pop[_i].chromosome, chrom_len);
+            memcpy(pop[i].chromosome, pop[_i].chromosome, pop[_i].chrom_len);
         }
 
         // Sometimes mutate
         if (rand() % mutation_chance == 0)
-            mutation_func(&(pop[i]), chrom_len);
+            mutation_func(&(pop[i]));
     }
 }
 
