@@ -9,7 +9,7 @@
 
 /* Solution format */
 typedef struct {
-    size_t chrom_len;   // length in whatever datatype
+    size_t chrom_len, gene_size;
     char dead, elite;
     unsigned int generation;
     int64_t fitness;
@@ -26,6 +26,7 @@ typedef struct {
 void ga_init(ga_solution_t *pop,
              size_t size,
              size_t chrom_len,
+             size_t gene_size,
              void *chrom_chunk,
              void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk));
 
@@ -39,13 +40,13 @@ void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, 
 // Creates the next generation by replacing dead solutions
 // mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-void ga_next_generation(ga_solution_t *pop,
-                        size_t size,
-                        int percent_dead,
-                        int percent_cross,
-                        void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                        int mutation_per_Mi,
-                        void (*mutation_func)(ga_solution_t *));
+int ga_next_generation(ga_solution_t *pop,
+                       size_t size,
+                       int percent_dead,
+                       int percent_cross,
+                       void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                       int mutation_per_Mi,
+                       void (*mutation_func)(ga_solution_t *, int));
 
 // Retrieves some fitness information about the population. Requires pop to be
 // sorted by fitness

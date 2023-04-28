@@ -8,12 +8,13 @@
 void ga_init(ga_solution_t *pop,
              size_t size,
              size_t chrom_len,
+             size_t gene_size,
              void *chrom_chunk,
              void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk))
 {
     for (size_t i = 0; i < size; i++)
     {
-        pop[i] = (ga_solution_t) { .chrom_len = chrom_len, .dead = 0, .elite = 0, .generation = 0, .fitness = 0, NULL };
+        pop[i] = (ga_solution_t) { .chrom_len = chrom_len, .gene_size = gene_size, .dead = 0, .elite = 0, .generation = 0, .fitness = 0, NULL };
         chrom_gen_func(&(pop[i]), i, chrom_len, chrom_chunk);
     }
 }
@@ -68,22 +69,28 @@ void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, 
 // Creates the next generation by replacing dead solutions
 // mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-void ga_next_generation(ga_solution_t *pop,
-                        size_t size,
-                        int percent_dead,
-                        int percent_cross,
-                        void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                        int mutation_per_Mi,
-                        void (*mutation_func)(ga_solution_t *))
+int ga_next_generation(ga_solution_t *pop,
+                       size_t size,
+                       int percent_dead,
+                       int percent_cross,
+                       void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                       int mutation_per_Mi,
+                       void (*mutation_func)(ga_solution_t *, int))
 {
     if (!size)
-        return;
+        return 0;
 
     size_t threshold = size * percent_dead / 100;
+    if (!threshold)
+        return 0;
     size_t cross = size * percent_cross / 100;
     int rn;
+    for (size_t i = 0; i < threshold; i++)
+        pop[i].generation++;
     for (size_t i = threshold; i < size; i++)
     {
+        pop[i].generation++;
+
         // Reproduce
         if (cross)
         {
@@ -95,13 +102,14 @@ void ga_next_generation(ga_solution_t *pop,
         {
             int _i = rand() % threshold;
             memcpy(&(pop[i]), &(pop[_i]), sizeof(ga_solution_t) - sizeof(void *));
-            memcpy(pop[i].chromosome, pop[_i].chromosome, pop[_i].chrom_len);
+            memcpy(pop[i].chromosome, pop[_i].chromosome, pop[_i].chrom_len * pop[_i].gene_size);
         }
 
         // Sometimes mutate
-        if ((rand() & 0xFFFFF) < (mutation_per_Mi & 0xFFFFF))
-            mutation_func(&(pop[i]));
+        mutation_func(&(pop[i]), mutation_per_Mi);
     }
+
+    return pop->generation;
 }
 
 // Retrieves some fitness information about the population. Requires pop to be
