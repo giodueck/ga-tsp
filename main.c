@@ -96,12 +96,23 @@ int main(int argc, char **argv)
 
     /* Initialize population */
     ga_init(population, POPSIZE, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
+
+    int64_t fittest = 0;
+    int stale = 0;
     
     /* Evolve for max_gens number of generations */
-    for (int i = 0; i < max_gens; i++)
+    for (int i = 0; i < max_gens && stale < 50; i++)
     {
         ga_eval(population, POPSIZE, fitness);
         ga_select(population, POPSIZE, GA_MINIMIZE, percent_dead, percent_elite);
+
+        if (population->fitness == fittest)
+            stale++;
+        else 
+        {
+            stale = 0;
+            fittest = population->fitness;
+        }
 
         // for (int i = 0; i < POPSIZE && !population[i].dead; i++)
         // {
