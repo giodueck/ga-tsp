@@ -1,6 +1,7 @@
 #include "genetic.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 // Creates a new randomly generated population
 // chrom_gen_func is a function that initializes a block of memory used for storing the gene pool.
@@ -50,9 +51,9 @@ void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, 
 
     // Kill lowest fitness solutions
     int dead_count = size * percent_dead / 100;
-    for (size_t i = 0; i < dead_count; i++)
+    for (size_t i = 0; i < size; i++)
     {
-        pop[size - 1 - i].dead = 1;
+        pop[i].dead = i >= (size - dead_count);
     }
 
     // Highest fitness solutions are made elite
@@ -109,6 +110,10 @@ int ga_next_generation(ga_solution_t *pop,
         mutation_func(&(pop[i]), mutation_per_Mi);
     }
 
+    for (size_t i = 0; i < size && i < threshold; i++)
+        if (!pop[i].elite)
+            mutation_func(&(pop[i]), mutation_per_Mi);
+
     return pop->generation;
 }
 
@@ -130,8 +135,8 @@ void ga_gen_info(ga_solution_t *pop,
     
     if (worst) *worst = pop[size - 1].fitness;
     
-    if (percent_elite && worst_elite && pop[size * percent_elite / 100].elite)
-        *worst_elite = pop[size * percent_elite / 100].fitness;
+    if (percent_elite && worst_elite && pop[size * percent_elite / 100 - 1].elite)
+        *worst_elite = pop[size * percent_elite / 100 - 1].fitness;
     
     if (!average) return;
     int64_t aux = 0;

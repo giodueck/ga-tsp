@@ -10,6 +10,8 @@ typedef struct tsp_2d_t {
 } tsp_2d_t;
 */
 
+#define DELIM " :\n"
+
 tsp_2d_t tsp_2d_read(const char *filename)
 {
     FILE *fd = fopen(filename, "rt");
@@ -34,10 +36,10 @@ tsp_2d_t tsp_2d_read(const char *filename)
         }
 
         // Interpret keyword
-        tok = strtok(buf, " :\n");
+        tok = strtok(buf, DELIM);
         if (strcmp(tok, "DIMENSION") == 0)
         {
-            tok = strtok(NULL, " \n");
+            tok = strtok(NULL, DELIM);
             dimension = atoi(tok);
             tsp.nodes = malloc(sizeof(tsp_2d_node_t) * dimension);
             tsp.dim = dimension;

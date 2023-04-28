@@ -8,9 +8,12 @@
 #include "genetic.h"
 #include "tsp_parser.h"
 
-#define POPSIZE 100
+#define POPSIZE 1000
 
 tsp_2d_t tsp;
+int percent_elite = 5, percent_dead = 60, percent_cross = 0;
+int mutations = 10000;
+int gen = 0, max_gens = 1000;
 
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
 {
@@ -90,9 +93,6 @@ int main(int argc, char **argv)
 
     uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * POPSIZE);
     ga_solution_t population[POPSIZE] = {0};
-    int percent_elite = 10, percent_dead = 50, percent_cross = 0;
-    int mutations = 10000;
-    int gen = 0, max_gens = 100;
 
     /* Initialize population */
     ga_init(population, POPSIZE, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
@@ -108,11 +108,11 @@ int main(int argc, char **argv)
         //     printf("%s%d: %lu\n", population[i].elite ? "*" : " ", i, population[i].fitness);
         // }
 
-        if ((gen + 1) % 5 == 0)
+        if ((gen + 1) % 10 == 0)
         {
             int64_t best, worst_elite = 0, avg, worst;
             ga_gen_info(population, POPSIZE, percent_elite, &best, &worst_elite, &avg, &worst);
-            printf("%d:\tB: %lu\t%d%%: %lu\tA: %lu\tW: %lu\n", gen, best, percent_elite, worst_elite, avg, worst);
+            printf("%3d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
         }
 
         gen = ga_next_generation(population, POPSIZE, percent_dead, percent_cross, NULL /* crossover */, mutations, mutate);
