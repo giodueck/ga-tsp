@@ -8,7 +8,7 @@
 #include "genetic.h"
 #include "tsp_parser.h"
 
-#define POPSIZE 5000
+#define POPSIZE 20
 
 tsp_2d_t tsp;
 
@@ -86,12 +86,16 @@ int main(int argc, char **argv)
     ga_init(population, POPSIZE, tsp.dim, chromosome_chunk, generate_tsp_solution);
 
     ga_eval(population, POPSIZE, fitness);
-    ga_select(population, POPSIZE, GA_MINIMIZE, 98, 1);
+    ga_select(population, POPSIZE, GA_MINIMIZE, 50, 1);
 
     for (int i = 0; i < POPSIZE && !population[i].dead; i++)
     {
-        printf("%s%d: %u\n", population[i].elite ? "*" : " ", i, population[i].fitness);
+        printf("%s%d: %lu\n", population[i].elite ? "*" : " ", i, population[i].fitness);
     }
+
+    int64_t best, worst_elite = 0, avg, worst;
+    ga_gen_info(population, POPSIZE, 1, &best, &worst_elite, &avg, &worst);
+    printf("Best: %lu\nLowest elite: %lu\nAverage: %lu\nWorst: %lu\n", best, worst_elite, avg, worst);
     
     free(chromosome_chunk);
     tsp_2d_free(tsp);

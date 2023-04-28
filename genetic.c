@@ -5,12 +5,15 @@
 // Creates a new randomly generated population
 // chrom_gen_func is a function that initializes a block of memory used for storing the gene pool.
 // The block chrom_chunk must be big enough to contain size * chrom_len bytes
-void ga_init(ga_solution_t *pop, size_t size, size_t chrom_len, void *chrom_chunk,
+void ga_init(ga_solution_t *pop,
+             size_t size,
+             size_t chrom_len,
+             void *chrom_chunk,
              void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk))
 {
     for (size_t i = 0; i < size; i++)
     {
-        pop[i] = (ga_solution_t) { .chrom_len = chrom_len, .dead = 0, .elite = 0, .generation = 0, .fitness = 0, .last_fitness = 0, NULL };
+        pop[i] = (ga_solution_t) { .chrom_len = chrom_len, .dead = 0, .elite = 0, .generation = 0, .fitness = 0, NULL };
         chrom_gen_func(&(pop[i]), i, chrom_len, chrom_chunk);
     }
 }
@@ -38,6 +41,9 @@ int ga_min(const void *a, const void *b)
 // O(size log size) / O(n^2) (worst)
 void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, int percent_elite)
 {
+    if (!size)
+        return;
+
     // Fittest in front
     qsort(pop, size, sizeof(ga_solution_t), criteria ? ga_min : ga_max);
 
@@ -60,12 +66,19 @@ void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, 
 }
 
 // Creates the next generation by replacing dead solutions
-// mutation_chance works as a 1 in n. E.g. 1 in a billion
+// mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-void ga_next_generation(ga_solution_t *pop, size_t size, int percent_dead,
-                        int percent_cross, void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                        int mutation_chance, void (*mutation_func)(ga_solution_t *))
+void ga_next_generation(ga_solution_t *pop,
+                        size_t size,
+                        int percent_dead,
+                        int percent_cross,
+                        void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                        int mutation_per_Mi,
+                        void (*mutation_func)(ga_solution_t *))
 {
+    if (!size)
+        return;
+
     size_t threshold = size * percent_dead / 100;
     size_t cross = size * percent_cross / 100;
     int rn;
@@ -86,21 +99,34 @@ void ga_next_generation(ga_solution_t *pop, size_t size, int percent_dead,
         }
 
         // Sometimes mutate
-        if (rand() % mutation_chance == 0)
+        if ((rand() & 0xFFFFF) < (mutation_per_Mi & 0xFFFFF))
             mutation_func(&(pop[i]));
     }
 }
 
-// Retrieves some fitness information about the population
+// Retrieves some fitness information about the population. Requires pop to be
+// sorted by fitness
 // O(size)
-void ga_gen_info(ga_solution_t *pop, size_t size, int percent_elite, int *best, int *worst_elite,
-                 int *average, int *worst)
+void ga_gen_info(ga_solution_t *pop,
+                 size_t size,
+                 int percent_elite,
+                 int64_t *best,
+                 int64_t *worst_elite,
+                 int64_t *average,
+                 int64_t *worst)
 {
-    *best = pop[0].fitness;
-    *worst = pop[size - 1].fitness;
-    if (percent_elite)
-        *worst_elite = pop[size * percent_elite / 100 - 1].fitness;
-    int aux = 0;
+    if (!size)
+        return;
+    
+    if (best) *best = pop[0].fitness;
+    
+    if (worst) *worst = pop[size - 1].fitness;
+    
+    if (percent_elite && worst_elite && pop[size * percent_elite / 100].elite)
+        *worst_elite = pop[size * percent_elite / 100].fitness;
+    
+    if (!average) return;
+    int64_t aux = 0;
     for (size_t i = 0; i < size; i++)
         aux += pop[i].fitness;
     *average = aux / size;

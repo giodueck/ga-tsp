@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
 
 /*
     Functions used to execute the genetic algorithm
@@ -10,7 +11,8 @@
 typedef struct {
     size_t chrom_len;   // length in whatever datatype
     char dead, elite;
-    unsigned int generation, fitness, last_fitness;
+    unsigned int generation;
+    int64_t fitness;
     void *chromosome;
 } ga_solution_t;
 
@@ -21,7 +23,10 @@ typedef struct {
 // Creates a new randomly generated population
 // chrom_gen_func is a function that initializes a block of memory used for storing the gene pool.
 // The block chrom_chunk must be big enough to contain size * chrom_len bytes
-void ga_init(ga_solution_t *pop, size_t size, size_t chrom_len, void *chrom_chunk,
+void ga_init(ga_solution_t *pop,
+             size_t size,
+             size_t chrom_len,
+             void *chrom_chunk,
              void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk));
 
 // Evaluates every solution in the population using the given function
@@ -32,14 +37,24 @@ void ga_eval(ga_solution_t *pop, size_t size, unsigned int (*fitness_func)(ga_so
 void ga_select(ga_solution_t *pop, size_t size, int criteria, int percent_dead, int percent_elite);
 
 // Creates the next generation by replacing dead solutions
-// mutation_chance works as a 1 in n. E.g. 1 in a billion
+// mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-void ga_next_generation(ga_solution_t *pop, size_t size, int percent_dead,
-                        int percent_cross, void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                        int mutation_chance, void (*mutation_func)(ga_solution_t *));
+void ga_next_generation(ga_solution_t *pop,
+                        size_t size,
+                        int percent_dead,
+                        int percent_cross,
+                        void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                        int mutation_per_Mi,
+                        void (*mutation_func)(ga_solution_t *));
 
-// Retrieves some fitness information about the population
+// Retrieves some fitness information about the population. Requires pop to be
+// sorted by fitness
 // O(size)
-void ga_gen_info(ga_solution_t *pop, size_t size, int percent_elite, int *best, int *worst_elite,
-                 int *average, int *worst);
+void ga_gen_info(ga_solution_t *pop,
+                 size_t size,
+                 int percent_elite,
+                 int64_t *best,
+                 int64_t *worst_elite,
+                 int64_t *average,
+                 int64_t *worst);
 
