@@ -73,13 +73,13 @@ void ga_select_trunc(ga_solution_t *pop, size_t size, int criteria, int percent_
 // Creates the next generation by replacing dead solutions
 // mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-int ga_next_generation(ga_solution_t *pop,
-                       size_t size,
-                       int percent_dead,
-                       int percent_cross,
-                       void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                       int mutation_per_Mi,
-                       void (*mutation_func)(ga_solution_t *, int))
+int ga_next_generation_trunc(ga_solution_t *pop,
+                             size_t size,
+                             int percent_dead,
+                             int percent_cross,
+                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                             int mutation_per_Mi,
+                             void (*mutation_func)(ga_solution_t *, int))
 {
     if (!size)
         return 0;
@@ -116,6 +116,156 @@ int ga_next_generation(ga_solution_t *pop,
     for (size_t i = 0; i < size && i < threshold; i++)
         if (!pop[i].elite)
             mutation_func(&(pop[i]), mutation_per_Mi);
+
+    return pop->generation;
+}
+
+// Creates tournaments of size k where the fittest individuals get to procreate, while losers
+// are replaced with offspring. If k >= 4, the parents are selected in one tournament and
+// the least fit losers are replaced with the offspring, otherwise two tournaments are held
+// which each yield one parent and one offspring. Offspring do not participate in the current tournament
+int ga_next_generation_tournament(ga_solution_t *pop,
+                                   size_t size,
+                                   int k,
+                                   int criteria,
+                                   int percent_dead,
+                                   int64_t (*fitness_func)(ga_solution_t *i),
+                                   void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                                   int mutation_per_Mi,
+                                   void (*mutation_func)(ga_solution_t *, int))
+{
+    /* Alg:
+        Mark all solutions as not dead
+        Let N = number of solutions replaced
+        For 1..size/2k
+            Hold 2 tournaments
+                Select k live individuals
+            Winners are parents, last-place-losers become offspring
+            Mark contestants as dead to avoid repeated selection
+        Increase generation
+    */
+
+    if (!size)
+        return 0;
+
+    for (size_t i = 0; i < size; i++)
+        pop[i].dead = 0;
+
+    if (k < 2)
+        k = 2;
+
+    int *contestants = (int *) malloc (sizeof(int) * k);
+    int64_t *fits = (int64_t *) malloc(sizeof(int64_t) * k);
+
+    // Number of tournaments. Lower k means more individuals get replaced
+    // per generation
+    int N = size / (k * 2);
+
+    // Select contestants
+    for (int i = 0; i < k; i++)
+    {
+        int pot = rand() % size;
+        while (pop[pot].dead)
+            pot = (pot + 1) % size;
+        contestants[i] = pot;
+        pop[pot].dead = 1;
+    }
+
+    for (int n = 0; n < N; n++)
+    {
+        int p1 = 0, p2 = 0;
+        int c1 = 0, c2 = 0;
+        int64_t low = 0;
+        int64_t high = 0;
+
+        // Evaluate
+        for (int i = 0; i < k; i++)
+            fits[i] = fitness_func(&pop[contestants[i]]);
+
+        low = fits[0];
+        high = low;
+        p1 = contestants[0];
+        c1 = p1;
+        for (int i = 1; i < k; i++)
+        {
+            if (fits[i] < low)
+            {
+                low = fits[i];
+                p1 = contestants[i];
+            }
+            if (fits[i] > high)
+            {
+                high = fits[i];
+                c1 = contestants[i];
+            }
+        }
+
+        // Select contestants (round 2)
+        for (int i = 0; i < k; i++)
+        {
+            int pot = rand() % size;
+            while (pop[pot].dead)
+                pot = (pot + 1) % size;
+            contestants[i] = pot;
+            pop[pot].dead = 1;
+        }
+
+        p2 = contestants[0];
+        c2 = p2;
+        low = fitness_func(&pop[contestants[0]]);
+        high = low;
+
+        // Evaluate (round 2)
+        for (int i = 0; i < k; i++)
+            fits[i] = fitness_func(&pop[contestants[i]]);
+
+        low = fits[0];
+        high = low;
+        p2 = contestants[0];
+        c2 = p2;
+        for (int i = 1; i < k; i++)
+        {
+            if (criteria == GA_MINIMIZE)
+            {
+                if (fits[i] < low)
+                {
+                    low = fits[i];
+                    p2 = contestants[i];
+                }
+                if (fits[i] > high)
+                {
+                    high = fits[i];
+                    c2 = contestants[i];
+                }
+            }
+
+            if (criteria == GA_MAXIMIZE)
+            {
+                if (fits[i] > low)
+                {
+                    low = fits[i];
+                    p2 = contestants[i];
+                }
+                if (fits[i] < high)
+                {
+                    high = fits[i];
+                    c2 = contestants[i];
+                }
+            }
+        }
+
+        // Create offspring
+        crossing_func(&(pop[p1]), &(pop[p2]), &(pop[c1]));
+        mutation_func(&(pop[c1]), mutation_per_Mi);
+        
+        crossing_func(&(pop[p2]), &(pop[p1]), &(pop[c2]));
+        mutation_func(&(pop[c2]), mutation_per_Mi);
+    } 
+    free(contestants);
+    free(fits);
+
+    for (size_t i = 0; i < size; i++)
+        pop[i].generation++;
 
     return pop->generation;
 }

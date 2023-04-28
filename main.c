@@ -8,13 +8,18 @@
 #include "genetic.h"
 #include "tsp_parser.h"
 
+#define SEL_TRUNCATE   0
+#define SEL_TOURNAMENT 1
+
 tsp_2d_t tsp;
 
 /* Parameters */
 int population_size = 2500;
-int percent_elite = 1, percent_dead = 50, percent_cross = 50;
+int percent_elite = 5, percent_dead = 50, percent_cross = 50;
 int mutations = 1000; // mutations / (1024*1024) = mutation chance
-int max_gens = 5000, gen_info_interval = 50;
+int max_gens = 3000, gen_info_interval = 100;
+int tournament_size = 4;
+int sel_strat = 1;
 
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
 {
@@ -145,17 +150,29 @@ int main(int argc, char **argv)
     /* Evolve for max_gens number of generations */
     for (int i = 0; i < max_gens; i++)
     {
-        /* Sort and select elite and survivors according to the truncation selection method */
-        ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        if (sel_strat == SEL_TRUNCATE)
+            /* Sort and select elite and survivors according to the truncation selection method */
+            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
         
         if ((gen + 1) % gen_info_interval == 0 || !gen)
         {
             int64_t best, worst_elite = 0, avg, worst;
+            // Just to sort population, doesn't make any changes
+            if (sel_strat != SEL_TRUNCATE)
+                ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+
             ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
             printf("%4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
         }
 
-        gen = ga_next_generation(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
+        if (sel_strat == SEL_TRUNCATE)
+            /* Replace dead population with new offspring from surviving individuals */
+            gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
+        else if (sel_strat == SEL_TOURNAMENT)
+            /* Do tournaments to define which solutions are selected to cross.
+            If the percentage dead is half or more, all individuals reproduce.
+            The strongest solution stays in the population if it is not topped.*/
+            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, percent_dead, fitness, crossover, mutations, mutate);
     }
     
     free(population);

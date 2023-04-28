@@ -40,13 +40,27 @@ void ga_select_trunc(ga_solution_t *pop, size_t size, int criteria, int percent_
 // Creates the next generation by replacing dead solutions
 // mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-int ga_next_generation(ga_solution_t *pop,
-                       size_t size,
-                       int percent_dead,
-                       int percent_cross,
-                       void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
-                       int mutation_per_Mi,
-                       void (*mutation_func)(ga_solution_t *, int));
+int ga_next_generation_trunc(ga_solution_t *pop,
+                             size_t size,
+                             int percent_dead,
+                             int percent_cross,
+                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                             int mutation_per_Mi,
+                             void (*mutation_func)(ga_solution_t *, int));
+
+// Creates tournaments of size k where the fittest individuals get to procreate, while losers
+// are replaced with offspring. If k >= 4, the parents are selected in one tournament and
+// the least fit losers are replaced with the offspring, otherwise two tournaments are held
+// which each yield one parent and one offspring. Offspring do not participate in the current tournament
+int ga_next_generation_tournament(ga_solution_t *pop,
+                                   size_t size,
+                                   int k,
+                                   int criteria,
+                                   int percent_dead,
+                                   int64_t (*fitness_func)(ga_solution_t *i),
+                                   void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                                   int mutation_per_Mi,
+                                   void (*mutation_func)(ga_solution_t *, int));
 
 // Retrieves some fitness information about the population. Requires pop to be
 // sorted by fitness
