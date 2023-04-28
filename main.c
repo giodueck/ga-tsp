@@ -11,10 +11,10 @@
 tsp_2d_t tsp;
 
 /* Parameters */
-int population_size = 1500;
-int percent_elite = 5, percent_dead = 50, percent_cross = 50;
+int population_size = 2500;
+int percent_elite = 1, percent_dead = 50, percent_cross = 50;
 int mutations = 1000; // mutations / (1024*1024) = mutation chance
-int max_gens = 2000, gen_info_interval = 50;
+int max_gens = 5000, gen_info_interval = 50;
 
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
 {
@@ -61,6 +61,8 @@ int64_t fitness(ga_solution_t *sol)
     return (int64_t) d;
 }
 
+void mutate(ga_solution_t *sol, int per_Mi);
+
 void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child)
 {
     // Take half of the chromosome of one parent, then the remaining half of the other such that
@@ -88,10 +90,23 @@ void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child)
 
         ((uint32_t *) child->chromosome)[l++] = n;
     }
+
+    // If solutions are very similar apply some high mutation rate
+    int diff = 0;
+    for (int i = 0; i < p1->chrom_len; i++)
+        if (((uint32_t *) p1->chromosome)[i] != ((uint32_t *) p2->chromosome)[i])
+            diff++;
+
+    // If parents are less than 10% different
+    if (diff <= p1->chrom_len / 10)
+        mutate(child, mutations * 15); // 15 times as likely to have mutations
+    // ^ This is funnily what happens in real life, but it gives better results in this case
 }
 
 void mutate(ga_solution_t *sol, int per_Mi)
 {
+    // 1024*1024 - 1
+    // This is close enough to 1 million and a good mask to efficiently get small rand() numbers
     per_Mi &= 0xFFFFF;
     for (size_t i = 0; i < sol->chrom_len; i++)
     {
@@ -130,14 +145,14 @@ int main(int argc, char **argv)
     /* Evolve for max_gens number of generations */
     for (int i = 0; i < max_gens; i++)
     {
-        ga_eval(population, population_size, fitness);
-        ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite);
+        /* Sort and select elite and survivors according to the truncation selection method */
+        ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
         
         if ((gen + 1) % gen_info_interval == 0 || !gen)
         {
             int64_t best, worst_elite = 0, avg, worst;
             ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
-            printf("%3d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
+            printf("%4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
         }
 
         gen = ga_next_generation(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
@@ -148,5 +163,4 @@ int main(int argc, char **argv)
     tsp_2d_free(tsp);
 
     return 0;
-    
 }

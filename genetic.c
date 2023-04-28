@@ -41,10 +41,13 @@ int ga_min(const void *a, const void *b)
 
 // Sorts population by fitness depending on the given criteria, then marks solutions not selected as dead
 // O(size log size) / O(n^2) (worst)
-void ga_select_trunc(ga_solution_t *pop, size_t size, int criteria, int percent_dead, int percent_elite)
+void ga_select_trunc(ga_solution_t *pop, size_t size, int criteria, int percent_dead, int percent_elite, int64_t (*fitness_func)(ga_solution_t *))
 {
     if (!size)
         return;
+
+    // Evaluate every solution
+    ga_eval(pop, size, fitness_func);
 
     // Fittest in front
     qsort(pop, size, sizeof(ga_solution_t), criteria ? ga_min : ga_max);
