@@ -11,8 +11,8 @@
 tsp_2d_t tsp;
 
 /* Parameters */
-int population_size = 1000;
-int percent_elite = 5, percent_dead = 50, percent_cross = 0;
+int population_size = 1500;
+int percent_elite = 5, percent_dead = 50, percent_cross = 50;
 int mutations = 1000; // mutations / (1024*1024) = mutation chance
 int max_gens = 2000, gen_info_interval = 50;
 
@@ -131,31 +131,9 @@ int main(int argc, char **argv)
     for (int i = 0; i < max_gens; i++)
     {
         ga_eval(population, population_size, fitness);
-        ga_select(population, population_size, GA_MINIMIZE, percent_dead, percent_elite);
+        ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite);
         
-        // Test code for crossover function
-        /* for (int i = 0; i < tsp.dim; i++)
-            printf("%u ", ((uint32_t *)population->chromosome)[i]);
-        printf("\n%ld\n", fitness(population));
-
-        for (int i = 0; i < tsp.dim; i++)
-            printf("%u ", ((uint32_t *)(population+1)->chromosome)[i]);
-        printf("\n%ld\n", fitness(population+1));
-
-        crossover(population, population + 1, population + 2);
-        crossover(population + 1, population, population + 3);
-
-        for (int i = 0; i < tsp.dim; i++)
-            printf("%u ", ((uint32_t *)(population+2)->chromosome)[i]);
-        printf("\n%ld\n", fitness(population+2));
-
-        for (int i = 0; i < tsp.dim; i++)
-            printf("%u ", ((uint32_t *)(population+3)->chromosome)[i]);
-        printf("\n%ld\n", fitness(population+3));
-
-        exit(0); */
-
-        if ((gen + 1) % gen_info_interval == 0)
+        if ((gen + 1) % gen_info_interval == 0 || !gen)
         {
             int64_t best, worst_elite = 0, avg, worst;
             ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
