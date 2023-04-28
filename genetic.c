@@ -21,7 +21,7 @@ void ga_init(ga_solution_t *pop,
 }
 
 // Evaluates every solution in the population using the given function
-void ga_eval(ga_solution_t *pop, size_t size, unsigned int (*fitness_func)(ga_solution_t *))
+void ga_eval(ga_solution_t *pop, size_t size, int64_t (*fitness_func)(ga_solution_t *))
 {
     for (size_t i = 0; i < size; i++)
         pop[i].fitness = fitness_func(&(pop[i]));
@@ -85,7 +85,7 @@ int ga_next_generation(ga_solution_t *pop,
     if (!threshold)
         return 0;
     size_t cross = size * percent_cross / 100;
-    int rn;
+
     for (size_t i = 0; i < threshold; i++)
         pop[i].generation++;
     for (size_t i = threshold; i < size; i++)

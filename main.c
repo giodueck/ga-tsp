@@ -8,12 +8,13 @@
 #include "genetic.h"
 #include "tsp_parser.h"
 
-#define POPSIZE 1000
-
 tsp_2d_t tsp;
-int percent_elite = 5, percent_dead = 60, percent_cross = 0;
-int mutations = 10000;
-int gen = 0, max_gens = 1000;
+
+/* Parameters */
+int population_size = 1000;
+int percent_elite = 5, percent_dead = 50, percent_cross = 0;
+int mutations = 1000; // mutations / (1024*1024) = mutation chance
+int max_gens = 2000, gen_info_interval = 50;
 
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
 {
@@ -48,7 +49,7 @@ double dist(tsp_2d_node_t a, tsp_2d_node_t b)
     return sqrt(n + m);
 }
 
-unsigned int fitness(ga_solution_t *sol)
+int64_t fitness(ga_solution_t *sol)
 {
     double d = 0;
     for (int i = 0; i < sol->chrom_len; i++)
@@ -57,10 +58,37 @@ unsigned int fitness(ga_solution_t *sol)
         d += dist(tsp.nodes[((uint32_t *) sol->chromosome)[i]],
                   tsp.nodes[((uint32_t *) sol->chromosome)[j]]);
     }
-    return (unsigned int) d;
+    return (int64_t) d;
 }
 
-void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child);
+void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child)
+{
+    // Take half of the chromosome of one parent, then the remaining half of the other such that
+    // nodes don't repeat
+    
+    int start = rand() % (p1->chrom_len / 2);
+    int l = p1->chrom_len / 2;
+    char *marks = (char *) malloc(sizeof(char) * p1->chrom_len);
+    memset(marks, 0, p1->chrom_len);
+
+    // Copy half from parent 1
+    for (int i = 0; i < l; i++)
+    {
+        uint32_t n = ((uint32_t *) p1->chromosome)[start + i];
+        ((uint32_t *) child->chromosome)[i] = n;
+        marks[n] = 1;
+    }
+
+    // Copy remaining
+    for (int i = 0; i < p1->chrom_len; i++)
+    {
+        uint32_t n = ((uint32_t *) p2->chromosome)[i];
+        if (marks[n])
+            continue;
+
+        ((uint32_t *) child->chromosome)[l++] = n;
+    }
+}
 
 void mutate(ga_solution_t *sol, int per_Mi)
 {
@@ -91,44 +119,53 @@ int main(int argc, char **argv)
     if (argc >= 3)
         srand(atoi(argv[2]));
 
-    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * POPSIZE);
-    ga_solution_t population[POPSIZE] = {0};
+    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * population_size);
+    ga_solution_t *population = (ga_solution_t *) malloc(sizeof(ga_solution_t) * population_size);
 
     /* Initialize population */
-    ga_init(population, POPSIZE, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
+    ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
 
-    int64_t fittest = 0;
-    int stale = 0;
+    int gen = 0;
     
     /* Evolve for max_gens number of generations */
-    for (int i = 0; i < max_gens && stale < 50; i++)
+    for (int i = 0; i < max_gens; i++)
     {
-        ga_eval(population, POPSIZE, fitness);
-        ga_select(population, POPSIZE, GA_MINIMIZE, percent_dead, percent_elite);
+        ga_eval(population, population_size, fitness);
+        ga_select(population, population_size, GA_MINIMIZE, percent_dead, percent_elite);
+        
+        // Test code for crossover function
+        /* for (int i = 0; i < tsp.dim; i++)
+            printf("%u ", ((uint32_t *)population->chromosome)[i]);
+        printf("\n%ld\n", fitness(population));
 
-        if (population->fitness == fittest)
-            stale++;
-        else 
-        {
-            stale = 0;
-            fittest = population->fitness;
-        }
+        for (int i = 0; i < tsp.dim; i++)
+            printf("%u ", ((uint32_t *)(population+1)->chromosome)[i]);
+        printf("\n%ld\n", fitness(population+1));
 
-        // for (int i = 0; i < POPSIZE && !population[i].dead; i++)
-        // {
-        //     printf("%s%d: %lu\n", population[i].elite ? "*" : " ", i, population[i].fitness);
-        // }
+        crossover(population, population + 1, population + 2);
+        crossover(population + 1, population, population + 3);
 
-        if ((gen + 1) % 10 == 0)
+        for (int i = 0; i < tsp.dim; i++)
+            printf("%u ", ((uint32_t *)(population+2)->chromosome)[i]);
+        printf("\n%ld\n", fitness(population+2));
+
+        for (int i = 0; i < tsp.dim; i++)
+            printf("%u ", ((uint32_t *)(population+3)->chromosome)[i]);
+        printf("\n%ld\n", fitness(population+3));
+
+        exit(0); */
+
+        if ((gen + 1) % gen_info_interval == 0)
         {
             int64_t best, worst_elite = 0, avg, worst;
-            ga_gen_info(population, POPSIZE, percent_elite, &best, &worst_elite, &avg, &worst);
+            ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
             printf("%3d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
         }
 
-        gen = ga_next_generation(population, POPSIZE, percent_dead, percent_cross, NULL /* crossover */, mutations, mutate);
+        gen = ga_next_generation(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
     }
     
+    free(population);
     free(chromosome_chunk);
     tsp_2d_free(tsp);
 

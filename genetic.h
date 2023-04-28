@@ -31,7 +31,7 @@ void ga_init(ga_solution_t *pop,
              void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk));
 
 // Evaluates every solution in the population using the given function
-void ga_eval(ga_solution_t *pop, size_t size, unsigned int (*fitness_func)(ga_solution_t *));
+void ga_eval(ga_solution_t *pop, size_t size, int64_t (*fitness_func)(ga_solution_t *));
 
 // Sorts population by fitness depending on the given criteria, then marks solutions not selected as dead
 // O(size log size) / O(n^2) (worst)
