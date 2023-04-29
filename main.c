@@ -21,6 +21,7 @@ int gen_info_interval = 100;    // how often to print information about the popu
 int mutations = 1000;           // mutations / (1024*1024) = mutation chance
 int num_threads = 1;            // number of islands to evolve
 int island_cross_interval = 100;// how often island populations are allowed to cross
+int f_answer = 0;               // if 1 print shortest path found
 int sel_strat = SEL_TOURNAMENT; // selection strategy 
     /* Truncation selection */
 int percent_elite = 5;          // percentage of elite selection, makes gen_info more informative for tournament
@@ -31,6 +32,7 @@ int tournament_size = 4;        // how many individuals get picked per tournamen
 
 /* CLI arguments 
 
+    -a      print the shortest path found
     -c      cross percentage (trunc)
     -d      dead percentage (trunc)
     -e      elite percentage (trunc)
@@ -163,6 +165,7 @@ void print_help(char **argv)
 Usage: %s [options] <file.tsp>\n\
 \n\
   Options:\n\
+    -a              Print the shortest path found after finishing evolution.\n\n\
     -c [0-100]      Percentage of new population generated from crossover.\n\
                     Only has an effect if -s is also given.\n\
                         Default: 50\n\n\
@@ -177,8 +180,11 @@ Usage: %s [options] <file.tsp>\n\
                     also be given without the -f option.\n\n\
     -g [integer]    Number of generations to evolve.\n\
                         Default: 3000\n\n\
-    -h              Display this help.\n\
-    -i [integer]    Number of generations between statistics prints.\n\
+    -h              Display this help.\n\n\
+    -i [integer]    Number of generations between statistics prints. -1 to disable\n\
+                    printing info before the algorithm finishes. The population is\n\
+                    sorted by fitness to find this information, which randomly\n\
+                    affects tournament selection.\n\
                         Default: 100\n\n\
     -k [integer]    Number of individuals per tournament. Every tournament\n\
                     selects one parent and one individual to be replaced by\n\
@@ -186,17 +192,19 @@ Usage: %s [options] <file.tsp>\n\
                     -s is not given.\n\
                         Default: 4\n\n\
     -m [integer]    Mutation rate out of 0x0FFFFF, or 1024x1024-1.\n\
-                    Default: 1000 (~0.1%)\n\
-    -p [integer]    Population size per island.\n\
+                    Default: 1000 (~0.1%)\n\n\
+    -p [integer]    Total population size. If there are more than one island this\n\
+                    population is divided evenly among them.\n\
                         Default: 2500\n\n\
     -r [integer]    Supply a seed to the random number generator.\n\
                     Default: 1\n\n\
     -s              Switch selection strategy to truncation with elitism selection.\n\
-                        Default is tournament selection.\n\
+                        Default is tournament selection.\n\n\
     -t [integer]    Number of islands, each of which is handled by a thread.\n\
                         Default: 1\n\n\
     -u [integer]    Number of generations after which islands will have their\n\
-                    populations crossed.\n\
+                    populations crossed. The crossed generation does not count\n\
+                    towards total generation count.\n\
                         Default: 100\n\n";
 
     printf(help_text, argv[0]);
@@ -204,13 +212,16 @@ Usage: %s [options] <file.tsp>\n\
 
 void parse_args(int argc, char **argv)
 {
-    const char *optstring = "c:d:e:f:g:hi:k:m:p:r:st:u:";
+    const char *optstring = "ac:d:e:f:g:hi:k:m:p:r:st:u:";
     int opt = 0;
 
     while ((opt = getopt(argc, argv, optstring)) != -1)
     {
         switch (opt)
         {
+            case 'a':
+                f_answer = 1;
+                break;
             case 'c':
                 percent_cross = atoi(optarg);
                 break;
@@ -260,6 +271,28 @@ void parse_args(int argc, char **argv)
     }
 }
 
+int serial_ga(ga_solution_t *population, int gens)
+{
+    int gen = population->generation;
+    while (gens-- > 0)
+    {
+        if (sel_strat == SEL_TRUNCATE)
+            /* Sort and select elite and survivors according to the truncation selection method */
+            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+
+        if (sel_strat == SEL_TRUNCATE)
+            /* Replace dead population with new offspring from surviving individuals */
+            gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
+        else if (sel_strat == SEL_TOURNAMENT)
+            /* Do tournaments to define which solutions are selected to cross.
+            If the percentage dead is half or more, all individuals reproduce.
+            The strongest solution stays in the population if it is not topped.*/
+            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
+    }
+
+    return gen;
+}
+
 int main(int argc, char **argv)
 {
     parse_args(argc, argv);
@@ -282,24 +315,27 @@ int main(int argc, char **argv)
     ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
 
     int gen = 0;
+    int island = 0;
     
     /* Evolve for max_gens number of generations */
     for (int i = 0; i < max_gens; i++)
     {
-        if (sel_strat == SEL_TRUNCATE)
-            /* Sort and select elite and survivors according to the truncation selection method */
-            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-        
-        if ((gen + 1) % gen_info_interval == 0 || !gen)
+        if (gen_info_interval != -1 && ((gen + 1) % gen_info_interval == 0 || !gen || gen + 1 == max_gens))
         {
             int64_t best, worst_elite = 0, avg, worst;
             // Just to sort population, doesn't make any changes
-            if (sel_strat != SEL_TRUNCATE)
-                ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
 
             ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
-            printf("%4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
+            if (num_threads > 1)
+                printf("I: %3d\tG: %4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", island + 1, gen + 1, best, percent_elite, worst_elite, avg, worst);
+            else 
+                printf("G: %4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
         }
+
+        if (sel_strat == SEL_TRUNCATE)
+            /* Sort and select elite and survivors according to the truncation selection method */
+            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
 
         if (sel_strat == SEL_TRUNCATE)
             /* Replace dead population with new offspring from surviving individuals */
@@ -309,6 +345,19 @@ int main(int argc, char **argv)
             If the percentage dead is half or more, all individuals reproduce.
             The strongest solution stays in the population if it is not topped.*/
             gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
+    }
+
+    /* Print best path */
+    if (f_answer)
+    {
+        ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        printf("\nBest path after %d generations: %lu\n", gen + 1, population[0].fitness);
+        for (int i = 0; i < tsp.dim; i++)
+        {
+            uint32_t n = ((uint32_t *)population[0].chromosome)[i];
+            printf("%s%u ", (i) ? "-> " : "", n);
+        }
+        printf("\n");
     }
     
     free(population);
