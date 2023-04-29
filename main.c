@@ -12,7 +12,7 @@
 #define SEL_TRUNCATE   0
 #define SEL_TOURNAMENT 1
 
-tsp_2d_t tsp;
+tsp_2d_t tsp = {0};
 
 /* Parameters */
 int population_size = 2500;     // population size per thread
@@ -52,10 +52,10 @@ int tournament_size = 4;        // how many individuals get picked per tournamen
 */
 
 // Initializes a random solution
-void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
+void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk, uint8_t *marks)
 {
     uint32_t *chromosome = (uint32_t *) chrom_chunk + i * chrom_len;
-    uint8_t *marks = (uint8_t *) malloc(sizeof(uint8_t) * chrom_len);
+    // uint8_t *marks = (uint8_t *) malloc(sizeof(uint8_t) * chrom_len);
     memset(marks, 0, sizeof(uint8_t) * chrom_len);
 
     for (size_t j = chrom_len; j; j--)
@@ -73,7 +73,6 @@ void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void 
     }
 
     sol->chromosome = (void *) chromosome;
-    free(marks);
 }
 
 // Euclidean distance
@@ -100,14 +99,14 @@ int64_t fitness(ga_solution_t *sol)
 void mutate(ga_solution_t *sol, int per_Mi);
 
 // Cross two solutions and produce a child solution with traits from both parents 
-void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child)
+void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8_t *marks)
 {
     // Take half of the chromosome of one parent, then the remaining half of the other such that
     // nodes don't repeat
     
     int start = rand() % (p1->chrom_len / 2);
     int l = p1->chrom_len / 2;
-    char *marks = (char *) malloc(sizeof(char) * p1->chrom_len);
+
     memset(marks, 0, p1->chrom_len);
 
     // Copy half from parent 1

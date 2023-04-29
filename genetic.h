@@ -28,7 +28,7 @@ void ga_init(ga_solution_t *pop,
              size_t chrom_len,
              size_t gene_size,
              void *chrom_chunk,
-             void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk));
+             void (*chrom_gen_func)(ga_solution_t *solution, size_t i, size_t chrom_len, void *chrom_chunk, uint8_t *marks));
 
 // Evaluates every solution in the population using the given function
 void ga_eval(ga_solution_t *pop, size_t size, int64_t (*fitness_func)(ga_solution_t *));
@@ -44,7 +44,7 @@ int ga_next_generation_trunc(ga_solution_t *pop,
                              size_t size,
                              int percent_dead,
                              int percent_cross,
-                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
                              int mutation_per_Mi,
                              void (*mutation_func)(ga_solution_t *, int));
 
@@ -57,7 +57,7 @@ int ga_next_generation_tournament(ga_solution_t *pop,
                                    int k,
                                    int criteria,
                                    int64_t (*fitness_func)(ga_solution_t *i),
-                                   void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
+                                   void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
                                    int mutation_per_Mi,
                                    void (*mutation_func)(ga_solution_t *, int));
 
