@@ -14,13 +14,19 @@
 tsp_2d_t tsp;
 
 /* Parameters */
-int population_size = 2500;
-int percent_elite = 5, percent_dead = 50, percent_cross = 50;
-int mutations = 1000; // mutations / (1024*1024) = mutation chance
-int max_gens = 3000, gen_info_interval = 100;
-int tournament_size = 4;
+int population_size = 2500;     // population size per thread
+int max_gens = 3000;            // when to stop the algorithm
+int gen_info_interval = 100;    // how often to print information about the population
+int mutations = 1000;           // mutations / (1024*1024) = mutation chance
 int sel_strat = 1;
+    /* Truncation selection */
+int percent_elite = 5;          // percentage of elite selection, makes gen_info more informative for tournament
+int percent_dead = 50;          // how many solutions get replaced 
+int percent_cross = 50;         // how many solutions are derived from crossover
+    /* Tournament selection */
+int tournament_size = 4;        // how many individuals get picked per tournament
 
+// Initializes a random solution
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
 {
     uint32_t *chromosome = (uint32_t *) chrom_chunk + i * chrom_len;
@@ -45,15 +51,15 @@ void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void 
     free(marks);
 }
 
+// Euclidean distance
 double dist(tsp_2d_node_t a, tsp_2d_node_t b)
 {
     double n = a.x - b.x;
-    n *= n;
     double m = a.y - b.y;
-    m *= m;
-    return sqrt(n + m);
+    return sqrt(n*n + m*m);
 }
 
+// Distance based fitness
 int64_t fitness(ga_solution_t *sol)
 {
     double d = 0;
@@ -68,6 +74,7 @@ int64_t fitness(ga_solution_t *sol)
 
 void mutate(ga_solution_t *sol, int per_Mi);
 
+// Cross two solutions and produce a child solution with traits from both parents 
 void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child)
 {
     // Take half of the chromosome of one parent, then the remaining half of the other such that
@@ -108,6 +115,7 @@ void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child)
     // ^ This is funnily what happens in real life, but it gives better results in this case
 }
 
+// Apply random swaps of genes dictated by some small chance
 void mutate(ga_solution_t *sol, int per_Mi)
 {
     // 1024*1024 - 1
@@ -172,7 +180,7 @@ int main(int argc, char **argv)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
             The strongest solution stays in the population if it is not topped.*/
-            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, percent_dead, fitness, crossover, mutations, mutate);
+            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
     }
     
     free(population);

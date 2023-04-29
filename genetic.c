@@ -128,7 +128,6 @@ int ga_next_generation_tournament(ga_solution_t *pop,
                                    size_t size,
                                    int k,
                                    int criteria,
-                                   int percent_dead,
                                    int64_t (*fitness_func)(ga_solution_t *i),
                                    void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *),
                                    int mutation_per_Mi,
@@ -158,7 +157,7 @@ int ga_next_generation_tournament(ga_solution_t *pop,
     int64_t *fits = (int64_t *) malloc(sizeof(int64_t) * k);
 
     // Number of tournaments. Lower k means more individuals get replaced
-    // per generation
+    // per generation, but higher k means weak individuals win less often
     int N = size / (k * 2);
 
     // Select contestants
@@ -219,6 +218,7 @@ int ga_next_generation_tournament(ga_solution_t *pop,
         for (int i = 0; i < k; i++)
             fits[i] = fitness_func(&pop[contestants[i]]);
 
+        // Pick parents and losers (offspring)
         low = fits[0];
         high = low;
         p2 = contestants[0];
