@@ -86,12 +86,12 @@ double dist(tsp_2d_node_t a, tsp_2d_node_t b)
 // Distance based fitness
 int64_t fitness(ga_solution_t *sol)
 {
-    double d = 0;
+    int64_t d = 0;
     for (int i = 0; i < sol->chrom_len; i++)
     {
         int j = (i + 1) % sol->chrom_len;
-        d += dist(tsp.nodes[((uint32_t *) sol->chromosome)[i]],
-                  tsp.nodes[((uint32_t *) sol->chromosome)[j]]);
+        d += round(dist(tsp.nodes[((uint32_t *) sol->chromosome)[i]],
+                        tsp.nodes[((uint32_t *) sol->chromosome)[j]]));
     }
     return (int64_t) d;
 }
