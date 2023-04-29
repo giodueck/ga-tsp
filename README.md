@@ -25,3 +25,8 @@ Los parametros son:
 - Frecuencia de cruce entre islas
 - Frecuencia de impresion de estadisticas en la consola
 - Seed para el PRNG
+
+# Creditos
+TSPLIB es un proyecto de la universidad de Heidelberg con una libreria de problemas de prueba y una documentacion del tipo de archivo que los representa.
+
+Problemas incluidos son de la universidad de Waterloo en su pagina [TSP Test Data](https://www.math.uwaterloo.ca/tsp/data/).
