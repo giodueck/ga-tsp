@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 #include "genetic.h"
 #include "tsp_parser.h"
@@ -18,13 +19,35 @@ int population_size = 2500;     // population size per thread
 int max_gens = 3000;            // when to stop the algorithm
 int gen_info_interval = 100;    // how often to print information about the population
 int mutations = 1000;           // mutations / (1024*1024) = mutation chance
-int sel_strat = 1;
+int num_threads = 1;            // number of islands to evolve
+int island_cross_interval = 100;// how often island populations are allowed to cross
+int sel_strat = SEL_TOURNAMENT; // selection strategy 
     /* Truncation selection */
 int percent_elite = 5;          // percentage of elite selection, makes gen_info more informative for tournament
 int percent_dead = 50;          // how many solutions get replaced 
 int percent_cross = 50;         // how many solutions are derived from crossover
     /* Tournament selection */
 int tournament_size = 4;        // how many individuals get picked per tournament
+
+/* CLI arguments 
+
+    -c      cross percentage (trunc)
+    -d      dead percentage (trunc)
+    -e      elite percentage (trunc)
+    -f      TSP file
+    -g      generations
+    -h      print help
+    -i      gen. info interval
+    -k      tournament size 
+    -m      mutation rate
+    -p      population size
+    -r      PRNG seed
+    -s      switch to truncation
+    -t      island (thread) count
+    -u      island crossover interval
+
+    Of these only -h and -s don't take arguments
+*/
 
 // Initializes a random solution
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk)
@@ -134,18 +157,123 @@ void mutate(ga_solution_t *sol, int per_Mi)
     }
 }
 
+void print_help(char **argv)
+{
+    const char *help_text = "\
+Usage: %s [options] <file.tsp>\n\
+\n\
+  Options:\n\
+    -c [0-100]      Percentage of new population generated from crossover.\n\
+                    Only has an effect if -s is also given.\n\
+                        Default: 50\n\n\
+    -d [0-100]      Percentage of population not selected for generating new\n\
+                    offspring. Only has an effect if -s is also given.\n\
+                        Default: 50\n\n\
+    -e [0-100]      Percentage of population covered by elitist selection. Only\n\
+                    has an effect if -s is also given. Also affects display of\n\
+                    generation statistics regardless of if -s is given.\n\
+                        Default: 5\n\n\
+    -f [filename]   Load TSP from the given file. Must be TSPLIB format. Can\n\
+                    also be given without the -f option.\n\n\
+    -g [integer]    Number of generations to evolve.\n\
+                        Default: 3000\n\n\
+    -h              Display this help.\n\
+    -i [integer]    Number of generations between statistics prints.\n\
+                        Default: 100\n\n\
+    -k [integer]    Number of individuals per tournament. Every tournament\n\
+                    selects one parent and one individual to be replaced by\n\
+                    offspring, so they are held in pairs. Only has an effect if\n\
+                    -s is not given.\n\
+                        Default: 4\n\n\
+    -m [integer]    Mutation rate out of 0x0FFFFF, or 1024x1024-1.\n\
+                    Default: 1000 (~0.1%)\n\
+    -p [integer]    Population size per island.\n\
+                        Default: 2500\n\n\
+    -r [integer]    Supply a seed to the random number generator.\n\
+                    Default: 1\n\n\
+    -s              Switch selection strategy to truncation with elitism selection.\n\
+                        Default is tournament selection.\n\
+    -t [integer]    Number of islands, each of which is handled by a thread.\n\
+                        Default: 1\n\n\
+    -u [integer]    Number of generations after which islands will have their\n\
+                    populations crossed.\n\
+                        Default: 100\n\n";
+
+    printf(help_text, argv[0]);
+}
+
+void parse_args(int argc, char **argv)
+{
+    const char *optstring = "c:d:e:f:g:hi:k:m:p:r:st:u:";
+    int opt = 0;
+
+    while ((opt = getopt(argc, argv, optstring)) != -1)
+    {
+        switch (opt)
+        {
+            case 'c':
+                percent_cross = atoi(optarg);
+                break;
+            case 'd':
+                percent_dead = atoi(optarg);
+                break;
+            case 'e':
+                percent_elite = atoi(optarg);
+                break;
+            case 'f':
+                tsp = tsp_2d_read(optarg);
+                break;
+            case 'g':
+                max_gens = atoi(optarg);
+                break;
+            case 'h':
+                print_help(argv);
+                exit(EXIT_SUCCESS);
+            case 'i':
+                gen_info_interval = atoi(optarg);
+                break;
+            case 'k':
+                tournament_size = atoi(optarg);
+                break;
+            case 'm':
+                mutations = atoi(optarg);
+                break;
+            case 'p':
+                population_size = atoi(optarg);
+                break;
+            case 'r':
+                srand(atoi(optarg));
+                break;
+            case 's':
+                sel_strat = SEL_TRUNCATE;
+                break;
+            case 't':
+                num_threads = atoi(optarg);
+                break;
+            case 'u':
+                island_cross_interval = atoi(optarg);
+                break;
+            default:
+                fprintf(stderr, "Usage: %s [options] <file.tsp>\nSee '%s -h' for help\n", argv[0], argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
-    if (argc < 2)
+    parse_args(argc, argv);
+
+    if (!tsp.dim)
     {
-        fprintf(stderr, "Usage: %s [file.tsp] <optional random seed>\n", argv[0]);
-        exit(EXIT_FAILURE);
+        if (optind >= argc)
+        {
+            fprintf(stderr, "Usage: %s [options] <file.tsp>\nSee '%s -h' for help\n", argv[0], argv[0]);
+            exit(EXIT_FAILURE);
+        }
+
+        tsp = tsp_2d_read(argv[optind]);
     }
-
-    tsp = tsp_2d_read(argv[1]);
-
-    if (argc >= 3)
-        srand(atoi(argv[2]));
 
     uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * population_size);
     ga_solution_t *population = (ga_solution_t *) malloc(sizeof(ga_solution_t) * population_size);
