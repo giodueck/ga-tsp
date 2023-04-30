@@ -79,9 +79,10 @@ int ga_next_generation_trunc(ga_solution_t *pop,
                              size_t size,
                              int percent_dead,
                              int percent_cross,
-                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
+                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *, struct drand48_data *),
                              int mutation_per_Mi,
-                             void (*mutation_func)(ga_solution_t *, int))
+                             void (*mutation_func)(ga_solution_t *, int, struct drand48_data *),
+                             struct drand48_data *rbuf)
 {
     if (!size)
         return 0;
@@ -103,7 +104,7 @@ int ga_next_generation_trunc(ga_solution_t *pop,
         if (cross)
         {
             int _i = rand() % threshold, _j = rand() % threshold;
-            crossing_func(&(pop[_i]), &(pop[_j]), &(pop[i]), marks);
+            crossing_func(&(pop[_i]), &(pop[_j]), &(pop[i]), marks, rbuf);
             cross--;
         }
         else
@@ -114,12 +115,12 @@ int ga_next_generation_trunc(ga_solution_t *pop,
         }
 
         // Sometimes mutate
-        mutation_func(&(pop[i]), mutation_per_Mi);
+        mutation_func(&(pop[i]), mutation_per_Mi, rbuf);
     }
 
     for (size_t i = 0; i < size && i < threshold; i++)
         if (!pop[i].elite)
-            mutation_func(&(pop[i]), mutation_per_Mi);
+            mutation_func(&(pop[i]), mutation_per_Mi, rbuf);
 
     free(marks);
     return pop->generation;
@@ -134,9 +135,10 @@ int ga_next_generation_tournament(ga_solution_t *pop,
                                   int k,
                                   int criteria,
                                   int64_t (*fitness_func)(ga_solution_t *i),
-                                  void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
+                                  void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *, struct drand48_data *),
                                   int mutation_per_Mi,
-                                  void (*mutation_func)(ga_solution_t *, int))
+                                  void (*mutation_func)(ga_solution_t *, int, struct drand48_data *),
+                                  struct drand48_data *rbuf)
 {
     /* Alg:
         Mark all solutions as not dead
@@ -161,6 +163,7 @@ int ga_next_generation_tournament(ga_solution_t *pop,
     int *contestants = (int *) malloc (sizeof(int) * k);
     int64_t *fits = (int64_t *) malloc(sizeof(int64_t) * k);
     uint8_t *marks = (uint8_t *) malloc(sizeof(uint8_t) * pop->chrom_len);
+    long lrand;
 
     // Number of tournaments. Lower k means more individuals get replaced
     // per generation, but higher k means weak individuals win less often
@@ -169,7 +172,8 @@ int ga_next_generation_tournament(ga_solution_t *pop,
     // Select contestants
     for (int i = 0; i < k; i++)
     {
-        int pot = rand() % size;
+        lrand48_r(rbuf, &lrand);
+        int pot = lrand % size;
         while (pop[pot].dead)
             pot = (pot + 1) % size;
         contestants[i] = pot;
@@ -208,7 +212,8 @@ int ga_next_generation_tournament(ga_solution_t *pop,
         // Select contestants (round 2)
         for (int i = 0; i < k; i++)
         {
-            int pot = rand() % size;
+            lrand48_r(rbuf, &lrand);
+            int pot = lrand % size;
             while (pop[pot].dead)
                 pot = (pot + 1) % size;
             contestants[i] = pot;
@@ -261,11 +266,11 @@ int ga_next_generation_tournament(ga_solution_t *pop,
         }
 
         // Create offspring
-        crossing_func(&(pop[p1]), &(pop[p2]), &(pop[c1]), marks);
-        mutation_func(&(pop[c1]), mutation_per_Mi);
+        crossing_func(&(pop[p1]), &(pop[p2]), &(pop[c1]), marks, rbuf);
+        mutation_func(&(pop[c1]), mutation_per_Mi, rbuf);
         
-        crossing_func(&(pop[p2]), &(pop[p1]), &(pop[c2]), marks);
-        mutation_func(&(pop[c2]), mutation_per_Mi);
+        crossing_func(&(pop[p2]), &(pop[p1]), &(pop[c2]), marks, rbuf);
+        mutation_func(&(pop[c2]), mutation_per_Mi, rbuf);
     } 
     free(contestants);
     free(fits);

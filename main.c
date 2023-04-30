@@ -17,6 +17,7 @@ tsp_2d_t tsp = {0};
 FILE *csv = NULL;
 pthread_t *threads = NULL;
 int *thread_bounds = NULL;
+struct drand48_data *rbufs = NULL;
 
 /* Parameters */
 int population_size = 2500;     // population size per thread
@@ -186,12 +187,12 @@ int serial_ga(ga_solution_t *population, int gens)
 
         if (sel_strat == SEL_TRUNCATE)
             /* Replace dead population with new offspring from surviving individuals */
-            gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
+            gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[0]);
         else if (sel_strat == SEL_TOURNAMENT)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
             The strongest solution stays in the population if it is not topped.*/
-            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
+            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate, &rbufs[0]);
     }
 
     return gen;
@@ -199,7 +200,7 @@ int serial_ga(ga_solution_t *population, int gens)
 
 struct parallel_ga_arg {
     ga_solution_t *population;
-    int gens, low, high;
+    int gens, low, high, t;
 };
 
 // Executes GA in parallel for a chunk of population, defined by the indices in the range [low, high)
@@ -216,12 +217,12 @@ void *parallel_ga(void *_arg)
 
         if (sel_strat == SEL_TRUNCATE)
             /* Replace dead population with new offspring from surviving individuals */
-            ga_next_generation_trunc(arg.population + arg.low, arg.high - arg.low, percent_dead, percent_cross, crossover, mutations, mutate);
+            ga_next_generation_trunc(arg.population + arg.low, arg.high - arg.low, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[arg.t]);
         else if (sel_strat == SEL_TOURNAMENT)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
             The strongest solution stays in the population if it is not topped.*/
-            ga_next_generation_tournament(arg.population + arg.low, arg.high - arg.low, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
+            ga_next_generation_tournament(arg.population + arg.low, arg.high - arg.low, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate, &rbufs[arg.t]);
     }
 
     return NULL;
@@ -270,12 +271,6 @@ int main(int argc, char **argv)
     uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * population_size);
     ga_solution_t *population = (ga_solution_t *) malloc(sizeof(ga_solution_t) * population_size);
 
-    /* Initialize population */
-    ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
-
-    int gen = 0;
-    int island = 0;
-
     if (csv)
         fprintf(csv, "Island,Generation,Best,Elite%%,Elite,Average,Worst\n");
 
@@ -292,7 +287,17 @@ int main(int argc, char **argv)
             thread_bounds[i + 1] = low;
         }
         thread_bounds[num_threads] = population_size;
-    }
+    } else 
+        num_threads = 1;
+
+    rbufs = (struct drand48_data *) malloc(sizeof(struct drand48_data) * num_threads);
+    for (int i = 0; i < num_threads; i++)
+        srand48_r(rand(), &rbufs[i]);
+
+    /* Initialize population */
+    ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
+
+    int gen = 0;
 
     /* Evolve for max_gens number of generations */
     while (gen < max_gens)
@@ -302,7 +307,7 @@ int main(int argc, char **argv)
         {
             if (gen_info_interval > 0)
             {
-                gen_info(population, island);
+                gen_info(population, 0);
 
                 gen = serial_ga(population, (max_gens - gen - gen_info_interval >= 0) ? gen_info_interval : max_gens - gen);
             }
@@ -330,7 +335,7 @@ int main(int argc, char **argv)
             {
                 if (gen_info_interval > 0)
                     gen_info(population, i);
-                args[i] = (struct parallel_ga_arg) { .population = population, .gens = ((max_gens - gen - island_cross_interval >= 0) ? island_cross_interval : max_gens - gen) - 1, .low = thread_bounds[i], .high = thread_bounds[i + 1] };
+                args[i] = (struct parallel_ga_arg) { .population = population, .gens = ((max_gens - gen - island_cross_interval >= 0) ? island_cross_interval : max_gens - gen) - 1, .low = thread_bounds[i], .high = thread_bounds[i + 1], .t = i };
                 pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
             }
 
@@ -351,7 +356,7 @@ int main(int argc, char **argv)
     if (gen_info_interval >= 0)
     {
         if (num_threads <= 1)
-            gen_info(population, island);
+            gen_info(population, 0);
         else 
         {
             if (gen_info_interval > 0)
@@ -392,6 +397,7 @@ int main(int argc, char **argv)
         free(threads);
         free(thread_bounds);
     }
+    free(rbufs);
 
     return 0;
 }

@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 /*
     Functions used to execute the genetic algorithm
@@ -44,9 +45,10 @@ int ga_next_generation_trunc(ga_solution_t *pop,
                              size_t size,
                              int percent_dead,
                              int percent_cross,
-                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
+                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *, struct drand48_data *),
                              int mutation_per_Mi,
-                             void (*mutation_func)(ga_solution_t *, int));
+                             void (*mutation_func)(ga_solution_t *, int, struct drand48_data *),
+                             struct drand48_data *rbuf);
 
 // Creates tournaments of size k where the fittest individuals get to procreate, while losers
 // are replaced with offspring. If k >= 4, the parents are selected in one tournament and
@@ -57,9 +59,10 @@ int ga_next_generation_tournament(ga_solution_t *pop,
                                   int k,
                                   int criteria,
                                   int64_t (*fitness_func)(ga_solution_t *i),
-                                  void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
+                                  void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *, struct drand48_data *),
                                   int mutation_per_Mi,
-                                  void (*mutation_func)(ga_solution_t *, int));
+                                  void (*mutation_func)(ga_solution_t *, int, struct drand48_data *),
+                                  struct drand48_data *rbuf);
 
 // Retrieves some fitness information about the population. Requires pop to be
 // sorted by fitness

@@ -15,8 +15,8 @@ double dist(const tsp_2d_node_t a, const tsp_2d_node_t b);
 int64_t fitness(ga_solution_t *sol);
 
 // Cross two solutions and produce a child solution with traits from both parents 
-void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8_t *marks);
+void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8_t *marks, struct drand48_data *rbuf);
 
 // Apply random swaps of genes dictated by some small chance
-void mutate(ga_solution_t *sol, int per_Mi);
+void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf);
 

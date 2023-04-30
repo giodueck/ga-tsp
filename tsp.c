@@ -1,10 +1,12 @@
 #include "tsp.h"
 #include "tsp_parser.h"
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
 extern tsp_2d_t tsp;
 extern int mutations;
+extern struct drand48_data *rbufs;
 
 // Initializes a random solution
 void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void *chrom_chunk, uint8_t *marks)
@@ -15,7 +17,9 @@ void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void 
 
     for (size_t j = chrom_len; j; j--)
     {
-        size_t r = rand() % j;
+        long n;
+        lrand48_r(&rbufs[0], &n);
+        size_t r = n % j;
         size_t l = 0;
         while (marks[l] || r)
         {
@@ -52,12 +56,14 @@ int64_t fitness(ga_solution_t *sol)
 }
 
 // Cross two solutions and produce a child solution with traits from both parents 
-void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8_t *marks)
+void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8_t *marks, struct drand48_data *rbuf)
 {
     // Take half of the chromosome of one parent, then the remaining half of the other such that
     // nodes don't repeat
     
-    int start = rand() % (p1->chrom_len / 2);
+    long lrand;
+    lrand48_r(rbuf, &lrand);
+    int start = lrand % (p1->chrom_len / 2);
     int l = p1->chrom_len / 2;
 
     memset(marks, 0, p1->chrom_len);
@@ -88,23 +94,26 @@ void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8
 
     // If parents are less than 10% different
     if (diff <= p1->chrom_len / 10)
-        mutate(child, mutations * 15); // 15 times as likely to have mutations
+        mutate(child, mutations * 15, rbuf); // 15 times as likely to have mutations
     // ^ This is not what happens in real life, but it gives better results in this case
 }
 
 // Apply random swaps of genes dictated by some small chance
-void mutate(ga_solution_t *sol, int per_Mi)
+void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf)
 {
     // 1024*1024 - 1
     // This is close enough to 1 million and a good mask to efficiently get small rand() numbers
     per_Mi &= 0xFFFFF;
     for (size_t i = 0; i < sol->chrom_len; i++)
     {
-        int r = rand() & 0xFFFFF;
+        long n;
+        lrand48_r(rbuf, &n);
+        int r = n & 0xFFFFF;
         if (r < per_Mi)
         {
             uint32_t aux = ((uint32_t*)sol->chromosome)[i];
-            uint32_t j = rand() % sol->chrom_len;
+            lrand48_r(rbuf, &n);
+            uint32_t j = n % sol->chrom_len;
             ((uint32_t*)sol->chromosome)[i] = ((uint32_t*)sol->chromosome)[j];
             ((uint32_t*)sol->chromosome)[j] = aux;
         }
