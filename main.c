@@ -13,6 +13,7 @@
 #define SEL_TOURNAMENT 1
 
 tsp_2d_t tsp = {0};
+FILE *csv = NULL;
 
 /* Parameters */
 int population_size = 2500;     // population size per thread
@@ -42,6 +43,7 @@ int tournament_size = 4;        // how many individuals get picked per tournamen
     -i      gen. info interval
     -k      tournament size 
     -m      mutation rate
+    -o      output gen info to file as CSV format
     -p      population size
     -r      PRNG seed
     -s      switch to truncation
@@ -136,7 +138,7 @@ void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8
     // If parents are less than 10% different
     if (diff <= p1->chrom_len / 10)
         mutate(child, mutations * 15); // 15 times as likely to have mutations
-    // ^ This is funnily what happens in real life, but it gives better results in this case
+    // ^ This is not what happens in real life, but it gives better results in this case
 }
 
 // Apply random swaps of genes dictated by some small chance
@@ -192,6 +194,7 @@ Usage: %s [options] <file.tsp>\n\
                         Default: 4\n\n\
     -m [integer]    Mutation rate out of 0x0FFFFF, or 1024x1024-1.\n\
                     Default: 1000 (~0.1%)\n\n\
+    -o [filename]   Output generation info fo file as CSV format.\n\n\
     -p [integer]    Total population size. If there are more than one island this\n\
                     population is divided evenly among them.\n\
                         Default: 2500\n\n\
@@ -211,7 +214,7 @@ Usage: %s [options] <file.tsp>\n\
 
 void parse_args(int argc, char **argv)
 {
-    const char *optstring = "ac:d:e:f:g:hi:k:m:p:r:st:u:";
+    const char *optstring = "ac:d:e:f:g:hi:k:m:o:p:r:st:u:";
     int opt = 0;
 
     while ((opt = getopt(argc, argv, optstring)) != -1)
@@ -248,6 +251,9 @@ void parse_args(int argc, char **argv)
             case 'm':
                 mutations = atoi(optarg);
                 break;
+            case 'o':
+                csv = fopen(optarg, "wt");
+                break;
             case 'p':
                 population_size = atoi(optarg);
                 break;
@@ -264,7 +270,7 @@ void parse_args(int argc, char **argv)
                 island_cross_interval = atoi(optarg);
                 break;
             default:
-                fprintf(stderr, "Usage: %s [options] <file.tsp>\nSee '%s -h' for help\n", argv[0], argv[0]);
+                fprintf(stderr, "Usage: '%s [options] <file.tsp>'\nSee '%s -h' for help\n", argv[0], argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
@@ -300,7 +306,7 @@ int main(int argc, char **argv)
     {
         if (optind >= argc)
         {
-            fprintf(stderr, "Usage: %s [options] <file.tsp>\nSee '%s -h' for help\n", argv[0], argv[0]);
+            fprintf(stderr, "Usage: '%s [options] <file.tsp>'\nSee '%s -h' for help\n", argv[0], argv[0]);
             exit(EXIT_FAILURE);
         }
 
@@ -312,6 +318,9 @@ int main(int argc, char **argv)
 
     /* Initialize population */
     ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
+
+    if (csv)
+        fprintf(csv, "Island,Generation,Best,Elite%%,Elite,Average,Worst\n");
 
     int gen = 0;
     int island = 0;
@@ -326,10 +335,12 @@ int main(int argc, char **argv)
             ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
 
             ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
+            if (csv)
+                fprintf(csv, "%d,%d,%lu,%d,%lu,%lu,%lu\n", island + 1, gen + 1, best, percent_elite, worst_elite, avg, worst);
             if (num_threads > 1)
-                printf("I: %3d\tG: %4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", island + 1, gen + 1, best, percent_elite, worst_elite, avg, worst);
+                printf("I: %3d\tG: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", island + 1, gen + 1, best, percent_elite, worst_elite, avg, worst);
             else 
-                printf("G: %4d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
+                printf("G: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
         }
 
         if (sel_strat == SEL_TRUNCATE)
@@ -350,7 +361,7 @@ int main(int argc, char **argv)
     if (f_answer)
     {
         ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-        printf("\nBest path after %d generations: %lu\n", gen + 1, population[0].fitness);
+        printf("\nBest path after %d generations: %lu\n", max_gens, population[0].fitness);
         for (int i = 0; i < tsp.dim; i++)
         {
             uint32_t n = ((uint32_t *)population[0].chromosome)[i];
@@ -362,6 +373,8 @@ int main(int argc, char **argv)
     free(population);
     free(chromosome_chunk);
     tsp_2d_free(tsp);
+    if (csv)
+        fclose(csv);
 
     return 0;
 }
