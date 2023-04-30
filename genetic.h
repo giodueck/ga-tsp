@@ -53,13 +53,13 @@ int ga_next_generation_trunc(ga_solution_t *pop,
 // the least fit losers are replaced with the offspring, otherwise two tournaments are held
 // which each yield one parent and one offspring. Offspring do not participate in the current tournament
 int ga_next_generation_tournament(ga_solution_t *pop,
-                                   size_t size,
-                                   int k,
-                                   int criteria,
-                                   int64_t (*fitness_func)(ga_solution_t *i),
-                                   void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
-                                   int mutation_per_Mi,
-                                   void (*mutation_func)(ga_solution_t *, int));
+                                  size_t size,
+                                  int k,
+                                  int criteria,
+                                  int64_t (*fitness_func)(ga_solution_t *i),
+                                  void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *),
+                                  int mutation_per_Mi,
+                                  void (*mutation_func)(ga_solution_t *, int));
 
 // Retrieves some fitness information about the population. Requires pop to be
 // sorted by fitness

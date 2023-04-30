@@ -14,6 +14,8 @@
 
 tsp_2d_t tsp = {0};
 FILE *csv = NULL;
+pthread_t *threads = NULL;
+int *thread_bounds = NULL;
 
 /* Parameters */
 int population_size = 2500;     // population size per thread
@@ -21,7 +23,7 @@ int max_gens = 3000;            // when to stop the algorithm
 int gen_info_interval = 100;    // how often to print information about the population
 int mutations = 1000;           // mutations / (1024*1024) = mutation chance
 int num_threads = 1;            // number of islands to evolve
-int island_cross_interval = 100;// how often island populations are allowed to cross
+int island_cross_interval = 0;  // how often island populations are allowed to cross
 int f_answer = 0;               // if 1 print shortest path found
 int sel_strat = SEL_TOURNAMENT; // selection strategy 
     /* Truncation selection */
@@ -78,7 +80,7 @@ void generate_tsp_solution(ga_solution_t *sol, size_t i, size_t chrom_len, void 
 }
 
 // Euclidean distance
-double dist(tsp_2d_node_t a, tsp_2d_node_t b)
+double dist(const tsp_2d_node_t a, const tsp_2d_node_t b)
 {
     double n = a.x - b.x;
     double m = a.y - b.y;
@@ -95,7 +97,7 @@ int64_t fitness(ga_solution_t *sol)
         d += round(dist(tsp.nodes[((uint32_t *) sol->chromosome)[i]],
                         tsp.nodes[((uint32_t *) sol->chromosome)[j]]));
     }
-    return (int64_t) d;
+    return d;
 }
 
 void mutate(ga_solution_t *sol, int per_Mi);
@@ -182,10 +184,13 @@ Usage: %s [options] <file.tsp>\n\
     -g [integer]    Number of generations to evolve.\n\
                         Default: 3000\n\n\
     -h              Display this help.\n\n\
-    -i [integer]    Number of generations between statistics prints. -1 to disable\n\
-                    printing info before the algorithm finishes. The population is\n\
-                    sorted by fitness to find this information, which randomly\n\
-                    affects tournament selection.\n\
+    -i [integer]    Number of generations between statistics prints. The\n\
+                    population is sorted by fitness to find this information, which\n\
+                    randomly affects tournament selection.\n\
+                    If the number of islands is more than one, the information is\n\
+                    printed after each crossing between islands instead.\n\
+                    -1 to disable all output.\n\
+                    0 to disable printing info before the algorithm finishes.\n\
                         Default: 100\n\n\
     -k [integer]    Number of individuals per tournament. Every tournament\n\
                     selects one parent and one individual to be replaced by\n\
@@ -194,7 +199,7 @@ Usage: %s [options] <file.tsp>\n\
                         Default: 4\n\n\
     -m [integer]    Mutation rate out of 0x0FFFFF, or 1024x1024-1.\n\
                     Default: 1000 (~0.1%)\n\n\
-    -o [filename]   Output generation info fo file as CSV format.\n\n\
+    -o [filename]   Output generation info to a CSV file.\n\n\
     -p [integer]    Total population size. If there are more than one island this\n\
                     population is divided evenly among them.\n\
                         Default: 2500\n\n\
@@ -205,9 +210,9 @@ Usage: %s [options] <file.tsp>\n\
     -t [integer]    Number of islands, each of which is handled by a thread.\n\
                         Default: 1\n\n\
     -u [integer]    Number of generations after which islands will have their\n\
-                    populations crossed. The crossed generation does not count\n\
-                    towards total generation count.\n\
-                        Default: 100\n\n";
+                    populations crossed.\n\
+                    If the interval is below 1, the populations will never cross.\n\
+                        Default: 0\n\n";
 
     printf(help_text, argv[0]);
 }
@@ -298,6 +303,61 @@ int serial_ga(ga_solution_t *population, int gens)
     return gen;
 }
 
+struct parallel_ga_arg {
+    ga_solution_t *population;
+    int gens, low, high;
+};
+
+// Executes GA in parallel for a chunk of population, defined by the indices in the range [low, high)
+void *parallel_ga(void *_arg)
+{
+    struct parallel_ga_arg arg = *(struct parallel_ga_arg *) _arg;
+    // struct drand48_data rd;
+    // srand48_r(arg.population->generation + arg.low, &rd);
+    while (arg.gens-- > 0)
+    {
+        if (sel_strat == SEL_TRUNCATE)
+            /* Sort and select elite and survivors according to the truncation selection method */
+            ga_select_trunc(arg.population + arg.low, arg.high - arg.low, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+
+        if (sel_strat == SEL_TRUNCATE)
+            /* Replace dead population with new offspring from surviving individuals */
+            ga_next_generation_trunc(arg.population + arg.low, arg.high - arg.low, percent_dead, percent_cross, crossover, mutations, mutate);
+        else if (sel_strat == SEL_TOURNAMENT)
+            /* Do tournaments to define which solutions are selected to cross.
+            If the percentage dead is half or more, all individuals reproduce.
+            The strongest solution stays in the population if it is not topped.*/
+            ga_next_generation_tournament(arg.population + arg.low, arg.high - arg.low, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
+    }
+
+    return NULL;
+}
+
+void gen_info(ga_solution_t *pop, int island)
+{
+    int64_t best, worst_elite = 0, avg, worst;
+    int gen = pop->generation;
+    // Just to sort population, doesn't make any changes
+    if (num_threads <= 1)
+    {
+        ga_select_trunc(pop, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        ga_gen_info(pop, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
+    }
+    else
+    {
+        gen = (pop + thread_bounds[island])->generation;
+        ga_select_trunc(pop + thread_bounds[island], thread_bounds[island + 1] - thread_bounds[island], GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        ga_gen_info(pop + thread_bounds[island], thread_bounds[island + 1] - thread_bounds[island], percent_elite, &best, &worst_elite, &avg, &worst);
+    }
+
+    if (csv)
+        fprintf(csv, "%d,%d,%lu,%d,%lu,%lu,%lu\n", island, gen, best, percent_elite, worst_elite, avg, worst);
+    if (num_threads > 1)
+        printf("I: %3d\tG: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", island, gen, best, percent_elite, worst_elite, avg, worst);
+    else 
+        printf("G: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen, best, percent_elite, worst_elite, avg, worst);
+}
+
 int main(int argc, char **argv)
 {
     parse_args(argc, argv);
@@ -319,42 +379,100 @@ int main(int argc, char **argv)
     /* Initialize population */
     ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
 
+    int gen = 0;
+    int island = 0;
+
     if (csv)
         fprintf(csv, "Island,Generation,Best,Elite%%,Elite,Average,Worst\n");
 
-    int gen = 0;
-    int island = 0;
-    
-    /* Evolve for max_gens number of generations */
-    for (int i = 0; i < max_gens; i++)
+    if (num_threads > 1)
     {
-        if (gen_info_interval != -1 && ((gen + 1) % gen_info_interval == 0 || !gen || gen + 1 == max_gens))
-        {
-            int64_t best, worst_elite = 0, avg, worst;
-            // Just to sort population, doesn't make any changes
-            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        threads = (pthread_t *) malloc(sizeof(pthread_t) * num_threads);
+        thread_bounds = (int *) malloc(sizeof(int) * (num_threads + 1));
 
-            ga_gen_info(population, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
-            if (csv)
-                fprintf(csv, "%d,%d,%lu,%d,%lu,%lu,%lu\n", island + 1, gen + 1, best, percent_elite, worst_elite, avg, worst);
-            if (num_threads > 1)
-                printf("I: %3d\tG: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", island + 1, gen + 1, best, percent_elite, worst_elite, avg, worst);
+        int low = 0;
+        thread_bounds[0] = low;
+        for (int i = 0; i < num_threads - 1; i++)
+        {
+            low += population_size / num_threads;
+            thread_bounds[i + 1] = low;
+        }
+        thread_bounds[num_threads] = population_size;
+    }
+
+    /* Evolve for max_gens number of generations */
+    while (gen < max_gens)
+    {
+        /* Single-threaded */
+        if (num_threads <= 1)
+        {
+            if (gen_info_interval > 0)
+            {
+                gen_info(population, island);
+
+                gen = serial_ga(population, (max_gens - gen - gen_info_interval >= 0) ? gen_info_interval : max_gens - gen);
+            }
             else 
-                printf("G: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen + 1, best, percent_elite, worst_elite, avg, worst);
+                gen = serial_ga(population, max_gens);
+            continue;
         }
 
-        if (sel_strat == SEL_TRUNCATE)
-            /* Sort and select elite and survivors according to the truncation selection method */
-            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        /* Multi-threaded */
+        struct parallel_ga_arg *args = (struct parallel_ga_arg *) malloc(sizeof(struct parallel_ga_arg) * num_threads);
+        if (island_cross_interval <= 0)
+        {
+            for (int i = 0; i < num_threads; i++)
+            {
+                if (gen_info_interval > 0)
+                    gen_info(population, i);
+                args[i] = (struct parallel_ga_arg) { .population = population, .gens = max_gens, .low = thread_bounds[i], .high = thread_bounds[i + 1] };
+                pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
+            }
 
-        if (sel_strat == SEL_TRUNCATE)
-            /* Replace dead population with new offspring from surviving individuals */
-            gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate);
-        else if (sel_strat == SEL_TOURNAMENT)
-            /* Do tournaments to define which solutions are selected to cross.
-            If the percentage dead is half or more, all individuals reproduce.
-            The strongest solution stays in the population if it is not topped.*/
-            gen = ga_next_generation_tournament(population, population_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate);
+            gen = max_gens;
+        } else 
+        {
+            for (int i = 0; i < num_threads; i++)
+            {
+                if (gen_info_interval > 0)
+                    gen_info(population, i);
+                args[i] = (struct parallel_ga_arg) { .population = population, .gens = island_cross_interval - 1, .low = thread_bounds[i], .high = thread_bounds[i + 1] };
+                pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
+            }
+
+            gen += island_cross_interval;
+        }
+
+        for (int i = 0; i < num_threads; i++)
+        {
+            pthread_join(threads[i], NULL);
+        }
+        free(args);
+
+        if (island_cross_interval > 0)
+            gen = serial_ga(population, 1);
+    }
+
+    /* Print last generation */
+    if (gen_info_interval >= 0)
+    {
+        if (num_threads <= 1)
+            gen_info(population, island);
+        else 
+        {
+            if (gen_info_interval > 0)
+            {
+                for (int i = 0; i < num_threads; i++)
+                    gen_info(population, i);
+                printf("\n");
+            }
+            
+            /* Print total stats */
+            int aux = num_threads;
+            num_threads = 0;
+            gen_info(population, 0);
+            num_threads = aux;
+        }
     }
 
     /* Print best path */
@@ -375,6 +493,11 @@ int main(int argc, char **argv)
     tsp_2d_free(tsp);
     if (csv)
         fclose(csv);
+    if (threads)
+    {
+        free(threads);
+        free(thread_bounds);
+    }
 
     return 0;
 }
