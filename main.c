@@ -41,11 +41,12 @@ int tournament_size = 4;        // how many individuals get picked per tournamen
     -c      cross percentage (trunc)
     -d      dead percentage (trunc)
     -e      elite percentage (trunc)
-    -f      TSP file
+    -f      TSP file, exclude duplications
     -g      generations
     -h      print help
     -i      gen. info interval
-    -k      tournament size 
+    -k      tournament size
+    -l      TSP file, keep duplications
     -m      mutation rate
     -o      output gen info to file as CSV format
     -p      population size
@@ -75,7 +76,7 @@ Usage: %s [options] <file.tsp>\n\
                     generation statistics regardless of if -s is given.\n\
                         Default: 5\n\n\
     -f [filename]   Load TSP from the given file. Must be TSPLIB format. Can\n\
-                    also be given without the -f option.\n\n\
+                    also be given without the -f option. Will exclude duplicates.\n\n\
     -g [integer]    Number of generations to evolve.\n\
                         Default: 3000\n\n\
     -h              Display this help.\n\n\
@@ -92,6 +93,8 @@ Usage: %s [options] <file.tsp>\n\
                     offspring, so they are held in pairs. Only has an effect if\n\
                     -s is not given.\n\
                         Default: 4\n\n\
+    -l [filename]   Load TSP from the given file. Must be TSPLIB format. Unlike -f\n\
+                    it will keep all duplicates.\n\n\
     -m [integer]    Mutation rate out of 0x0FFFFF, or 1024x1024-1.\n\
                     Default: 1000 (~0.1%)\n\n\
     -o [filename]   Output generation info to a CSV file.\n\n\
@@ -114,7 +117,7 @@ Usage: %s [options] <file.tsp>\n\
 
 void parse_args(int argc, char **argv)
 {
-    const char *optstring = "ac:d:e:f:g:hi:k:m:o:p:r:st:u:";
+    const char *optstring = "ac:d:e:f:g:hi:k:l:m:o:p:r:st:u:";
     int opt = 0;
 
     while ((opt = getopt(argc, argv, optstring)) != -1)
@@ -134,7 +137,7 @@ void parse_args(int argc, char **argv)
                 percent_elite = atoi(optarg);
                 break;
             case 'f':
-                tsp = tsp_2d_read(optarg);
+                tsp = tsp_2d_read_dedup(optarg);
                 break;
             case 'g':
                 max_gens = atoi(optarg);
@@ -147,6 +150,9 @@ void parse_args(int argc, char **argv)
                 break;
             case 'k':
                 tournament_size = atoi(optarg);
+                break;
+            case 'l':
+                tsp = tsp_2d_read(optarg);
                 break;
             case 'm':
                 mutations = atoi(optarg);
@@ -265,9 +271,10 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
 
-        tsp = tsp_2d_read(argv[optind]);
+        tsp = tsp_2d_read_dedup(argv[optind]);
     }
-
+    printf("Dim = %lu\n", tsp.dim);
+    
     uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * population_size);
     ga_solution_t *population = (ga_solution_t *) malloc(sizeof(ga_solution_t) * population_size);
 

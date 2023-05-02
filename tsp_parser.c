@@ -66,6 +66,40 @@ tsp_2d_t tsp_2d_read(const char *filename)
     return tsp;
 }
 
+tsp_2d_t tsp_2d_read_dedup(const char *filename)
+{
+    tsp_2d_t otsp = tsp_2d_read(filename);
+    char *marks = (char *) malloc(sizeof(char) * otsp.dim);
+    int cnt = otsp.dim;
+
+    for (int i = 1; i < otsp.dim; i++)
+    {
+        marks[i] = 0;
+        for (int j = 0; j < i; j++)
+        {
+            if (otsp.nodes[i].x == otsp.nodes[j].x && otsp.nodes[i].y == otsp.nodes[j].y)
+            {
+                marks[i] = 1;
+                cnt--;
+                j = i;
+            }
+        }
+    }
+
+    tsp_2d_t ntsp = {0};
+    ntsp.nodes = malloc(sizeof(tsp_2d_node_t) * cnt);
+    ntsp.dim = cnt;
+
+    for (int i = 0, j = 0; i < otsp.dim; i++)
+    {
+        if (!marks[i])
+            ntsp.nodes[j++] = otsp.nodes[i];
+    }
+
+    tsp_2d_free(otsp);
+    return ntsp;
+}
+
 void tsp_2d_free(tsp_2d_t tsp)
 {
     free(tsp.nodes);
