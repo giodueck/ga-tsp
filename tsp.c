@@ -46,12 +46,16 @@ double dist(const tsp_2d_node_t a, const tsp_2d_node_t b)
 int64_t fitness(ga_solution_t *sol)
 {
     int64_t d = 0;
+    if (sol->fit_gen)
+        return sol->fitness;
     for (int i = 0; i < sol->chrom_len; i++)
     {
         int j = (i + 1) % sol->chrom_len;
         d += round(dist(tsp.nodes[((uint32_t *) sol->chromosome)[i]],
                         tsp.nodes[((uint32_t *) sol->chromosome)[j]]));
     }
+    sol->fitness = d;
+    sol->fit_gen = 1;
     return d;
 }
 

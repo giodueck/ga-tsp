@@ -14,6 +14,7 @@ typedef struct {
     char dead, elite;
     unsigned int generation;
     int64_t fitness;
+    unsigned int fit_gen;   // auxiliary to help caching fitness
     void *chromosome;
 } ga_solution_t;
 

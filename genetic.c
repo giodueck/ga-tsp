@@ -16,7 +16,7 @@ void ga_init(ga_solution_t *pop,
     uint8_t *marks = (uint8_t *) malloc(sizeof(uint8_t) * chrom_len);
     for (size_t i = 0; i < size; i++)
     {
-        pop[i] = (ga_solution_t) { .chrom_len = chrom_len, .gene_size = gene_size, .dead = 0, .elite = 0, .generation = 0, .fitness = 0, NULL };
+        pop[i] = (ga_solution_t) { .chrom_len = chrom_len, .gene_size = gene_size, .dead = 0, .elite = 0, .generation = 0, .fitness = 0, .fit_gen = 0, NULL };
         chrom_gen_func(&(pop[i]), i, chrom_len, chrom_chunk, marks);
     }
     free(marks);
@@ -169,23 +169,23 @@ int ga_next_generation_tournament(ga_solution_t *pop,
     // per generation, but higher k means weak individuals win less often
     int N = size / (k * 2);
 
-    // Select contestants
-    for (int i = 0; i < k; i++)
-    {
-        lrand48_r(rbuf, &lrand);
-        int pot = lrand % size;
-        while (pop[pot].dead)
-            pot = (pot + 1) % size;
-        contestants[i] = pot;
-        pop[pot].dead = 1;
-    }
-
     for (int n = 0; n < N; n++)
     {
         int p1 = 0, p2 = 0;
         int c1 = 0, c2 = 0;
         int64_t low = 0;
         int64_t high = 0;
+
+        // Select contestants
+        for (int i = 0; i < k; i++)
+        {
+            lrand48_r(rbuf, &lrand);
+            int pot = lrand % size;
+            while (pop[pot].dead)
+                pot = (pot + 1) % size;
+            contestants[i] = pot;
+            pop[pot].dead = 1;
+        }
 
         // Evaluate
         for (int i = 0; i < k; i++)
@@ -268,9 +268,13 @@ int ga_next_generation_tournament(ga_solution_t *pop,
         // Create offspring
         crossing_func(&(pop[p1]), &(pop[p2]), &(pop[c1]), marks, rbuf);
         mutation_func(&(pop[c1]), mutation_per_Mi, rbuf);
+        pop[c1].fit_gen = 0;
+        fitness_func(&pop[c1]);
         
         crossing_func(&(pop[p2]), &(pop[p1]), &(pop[c2]), marks, rbuf);
         mutation_func(&(pop[c2]), mutation_per_Mi, rbuf);
+        pop[c2].fit_gen = 0;
+        fitness_func(&pop[c2]);
     } 
     free(contestants);
     free(fits);
