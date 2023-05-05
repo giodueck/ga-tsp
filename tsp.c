@@ -117,8 +117,20 @@ void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf)
         uint32_t aux = ((uint32_t*)sol->chromosome)[i];
         lrand48_r(rbuf, &n);
         uint32_t j = n % sol->chrom_len;
-        ((uint32_t*)sol->chromosome)[i] = ((uint32_t*)sol->chromosome)[j];
-        ((uint32_t*)sol->chromosome)[j] = aux;
+
+        // Sometimes do 2-swap
+        if ((n & 0xF) < 0xA)
+        {
+            ((uint32_t*)sol->chromosome)[i] = ((uint32_t*)sol->chromosome)[j];
+            ((uint32_t*)sol->chromosome)[j] = aux;
+        } else // other times to 3-swap
+        {
+            lrand48_r(rbuf, &n);
+            uint32_t k = n % sol->chrom_len;
+            ((uint32_t*)sol->chromosome)[i] = ((uint32_t*)sol->chromosome)[j];
+            ((uint32_t*)sol->chromosome)[j] = ((uint32_t*)sol->chromosome)[k];
+            ((uint32_t*)sol->chromosome)[k] = aux;
+        }
     }
 }
 
