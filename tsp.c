@@ -96,9 +96,9 @@ void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8
         if (((uint32_t *) p1->chromosome)[i] != ((uint32_t *) p2->chromosome)[i])
             diff++;
 
-    // If parents are less than 10% different
-    if (diff <= p1->chrom_len / 10)
-        mutate(child, mutations * 15, rbuf); // 15 times as likely to have mutations
+    // If parents are less than 5% different
+    if (diff <= p1->chrom_len / 20)
+        mutate(child, mutations * 20, rbuf); // 15 times as likely to have mutations
     // ^ This is not what happens in real life, but it gives better results in this case
 }
 
@@ -108,19 +108,17 @@ void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf)
     // 1024*1024 - 1
     // This is close enough to 1 million and a good mask to efficiently get small rand() numbers
     per_Mi &= 0xFFFFF;
-    for (size_t i = 0; i < sol->chrom_len; i++)
+    long n;
+    lrand48_r(rbuf, &n);
+    while ((n & 0xFFFFF) < per_Mi)
     {
-        long n;
         lrand48_r(rbuf, &n);
-        int r = n & 0xFFFFF;
-        if (r < per_Mi)
-        {
-            uint32_t aux = ((uint32_t*)sol->chromosome)[i];
-            lrand48_r(rbuf, &n);
-            uint32_t j = n % sol->chrom_len;
-            ((uint32_t*)sol->chromosome)[i] = ((uint32_t*)sol->chromosome)[j];
-            ((uint32_t*)sol->chromosome)[j] = aux;
-        }
+        uint32_t i = n % sol->chrom_len;
+        uint32_t aux = ((uint32_t*)sol->chromosome)[i];
+        lrand48_r(rbuf, &n);
+        uint32_t j = n % sol->chrom_len;
+        ((uint32_t*)sol->chromosome)[i] = ((uint32_t*)sol->chromosome)[j];
+        ((uint32_t*)sol->chromosome)[j] = aux;
     }
 }
 
