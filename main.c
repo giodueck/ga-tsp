@@ -75,8 +75,8 @@ Usage: %s [options] <file.tsp>\n\
                     has an effect if -s is also given. Also affects display of\n\
                     generation statistics regardless of if -s is given.\n\
                         Default: 5\n\n\
-    -f [filename]   Load TSP from the given file. Must be TSPLIB format. Can\n\
-                    also be given without the -f option. Will exclude duplicates.\n\n\
+    -f [filename]   Load TSP from the given file. Must be TSPLIB format.\n\
+                    Will exclude duplicates.\n\n\
     -g [integer]    Number of generations to evolve.\n\
                         Default: 3000\n\n\
     -h              Display this help.\n\n\
@@ -94,7 +94,7 @@ Usage: %s [options] <file.tsp>\n\
                     -s is not given.\n\
                         Default: 4\n\n\
     -l [filename]   Load TSP from the given file. Must be TSPLIB format. Unlike -f\n\
-                    it will keep all duplicates.\n\n\
+                    it will keep all duplicates. Can be used implicitly.\n\n\
     -m [integer]    Mutation rate out of 0x0FFFFF, or 1024x1024-1.\n\
                     Default: 1000 (~0.1%)\n\n\
     -o [filename]   Output generation info to a CSV file.\n\n\
@@ -271,7 +271,8 @@ int main(int argc, char **argv)
             exit(EXIT_FAILURE);
         }
 
-        tsp = tsp_2d_read_dedup(argv[optind]);
+        // There is a bug in the deduplicated reading causing wrong fitness results.
+        tsp = tsp_2d_read(argv[optind]);
     }
     printf("Dim = %lu\n", tsp.dim);
     
