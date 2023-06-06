@@ -109,10 +109,11 @@ void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf)
     // This is close enough to 1 million and a good mask to efficiently get small rand() numbers
     per_Mi &= 0xFFFFF;
     int per_Mi2 = 3 * per_Mi / 4 + 1;
-    long n;
+    long n, n2;
     lrand48_r(rbuf, &n);
     while ((n & 0xFFFFF) < per_Mi)
     {
+        n2 = n;
         lrand48_r(rbuf, &n);
         uint32_t i = n % sol->chrom_len;
         uint32_t aux = ((uint32_t*)sol->chromosome)[i];
@@ -120,7 +121,7 @@ void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf)
 
         uint32_t j;
         // Most times make j a neighbor
-        if ((n & 0xFFFFF) < per_Mi2)
+        if ((n2 & 0xFFFFF) < per_Mi2)
             j = (i + 1) % sol->chrom_len;
         else 
             j = n % sol->chrom_len;
