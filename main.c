@@ -65,15 +65,8 @@ Usage: %s [options] <file.tsp>\n\
 \n\
   Options:\n\
     -a              Print the shortest path found after finishing evolution.\n\n\
-    -c [0-100]      Percentage of new population generated from crossover.\n\
-                    Only has an effect if -s is also given.\n\
-                        Default: 50\n\n\
-    -d [0-100]      Percentage of population not selected for generating new\n\
-                    offspring. Only has an effect if -s is also given.\n\
-                        Default: 50\n\n\
-    -e [0-100]      Percentage of population covered by elitist selection. Only\n\
-                    has an effect if -s is also given. Also affects display of\n\
-                    generation statistics regardless of if -s is given.\n\
+    -e [0-100]      Affects display of generation statistics, shows fitness of\n\
+                    top percentage of solutions.\n\
                         Default: 5\n\n\
     -f [filename]   Load TSP from the given file. Must be TSPLIB format.\n\
                     Will exclude duplicates.\n\n\
@@ -90,8 +83,7 @@ Usage: %s [options] <file.tsp>\n\
                         Default: 100\n\n\
     -k [integer]    Number of individuals per tournament. Every tournament\n\
                     selects one parent and one individual to be replaced by\n\
-                    offspring, so they are held in pairs. Only has an effect if\n\
-                    -s is not given.\n\
+                    offspring, so they are held in pairs.\n\
                         Default: 4\n\n\
     -l [filename]   Load TSP from the given file. Must be TSPLIB format. Unlike -f\n\
                     it will keep all duplicates. Can be used implicitly.\n\n\
@@ -103,8 +95,6 @@ Usage: %s [options] <file.tsp>\n\
                         Default: 2500\n\n\
     -r [integer]    Supply a seed to the random number generator.\n\
                     Default: 1\n\n\
-    -s              Switch selection strategy to truncation with elitism selection.\n\
-                        Default is tournament selection.\n\n\
     -t [integer]    Number of islands, each of which is handled by a thread.\n\
                         Default: 1\n\n\
     -u [integer]    Number of generations after which islands will have their\n\
@@ -117,7 +107,7 @@ Usage: %s [options] <file.tsp>\n\
 
 void parse_args(int argc, char **argv)
 {
-    const char *optstring = "ac:d:e:f:g:hi:k:l:m:o:p:r:st:u:";
+    const char *optstring = "ae:f:g:hi:k:l:m:o:p:r:t:u:";
     int opt = 0;
 
     while ((opt = getopt(argc, argv, optstring)) != -1)
@@ -126,12 +116,6 @@ void parse_args(int argc, char **argv)
         {
             case 'a':
                 f_answer = 1;
-                break;
-            case 'c':
-                percent_cross = atoi(optarg);
-                break;
-            case 'd':
-                percent_dead = atoi(optarg);
                 break;
             case 'e':
                 percent_elite = atoi(optarg);
@@ -166,9 +150,6 @@ void parse_args(int argc, char **argv)
             case 'r':
                 srand(atoi(optarg));
                 break;
-            case 's':
-                sel_strat = SEL_TRUNCATE;
-                break;
             case 't':
                 num_threads = atoi(optarg);
                 break;
@@ -187,14 +168,15 @@ int serial_ga(ga_solution_t *population, int gens)
     int gen = population->generation;
     while (gens-- > 0)
     {
-        if (sel_strat == SEL_TRUNCATE)
-            /* Sort and select elite and survivors according to the truncation selection method */
-            ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-
-        if (sel_strat == SEL_TRUNCATE)
-            /* Replace dead population with new offspring from surviving individuals */
-            gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[0]);
-        else if (sel_strat == SEL_TOURNAMENT)
+        // if (sel_strat == SEL_TRUNCATE)
+        //     /* Sort and select elite and survivors according to the truncation selection method */
+        //     ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        //
+        // if (sel_strat == SEL_TRUNCATE)
+        //     /* Replace dead population with new offspring from surviving individuals */
+        //     gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[0]);
+        // else 
+        if (sel_strat == SEL_TOURNAMENT)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
             The strongest solution stays in the population if it is not topped.*/
@@ -217,14 +199,15 @@ void *parallel_ga(void *_arg)
     // srand48_r(arg.population->generation + arg.low, &rd);
     while (arg.gens-- > 0)
     {
-        if (sel_strat == SEL_TRUNCATE)
-            /* Sort and select elite and survivors according to the truncation selection method */
-            ga_select_trunc(arg.population + arg.low, arg.high - arg.low, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-
-        if (sel_strat == SEL_TRUNCATE)
-            /* Replace dead population with new offspring from surviving individuals */
-            ga_next_generation_trunc(arg.population + arg.low, arg.high - arg.low, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[arg.t]);
-        else if (sel_strat == SEL_TOURNAMENT)
+        // if (sel_strat == SEL_TRUNCATE)
+        //     /* Sort and select elite and survivors according to the truncation selection method */
+        //     ga_select_trunc(arg.population + arg.low, arg.high - arg.low, GA_MINIMIZE, percent_dead, percent_elite, fitness);
+        //
+        // if (sel_strat == SEL_TRUNCATE)
+        //     /* Replace dead population with new offspring from surviving individuals */
+        //     ga_next_generation_trunc(arg.population + arg.low, arg.high - arg.low, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[arg.t]);
+        // else
+        if (sel_strat == SEL_TOURNAMENT)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
             The strongest solution stays in the population if it is not topped.*/

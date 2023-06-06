@@ -75,7 +75,7 @@ void ga_select_trunc(ga_solution_t *pop, size_t size, int criteria, int percent_
 // Creates the next generation by replacing dead solutions
 // mutation_chance is a number in a million (actually 1024*1024)
 // O(size)
-int ga_next_generation_trunc(ga_solution_t *pop,
+/* int ga_next_generation_trunc(ga_solution_t *pop,
                              size_t size,
                              int percent_dead,
                              int percent_cross,
@@ -124,7 +124,7 @@ int ga_next_generation_trunc(ga_solution_t *pop,
 
     free(marks);
     return pop->generation;
-}
+} */
 
 // Creates tournaments of size k where the fittest individuals get to procreate, while losers
 // are replaced with offspring. If k >= 4, the parents are selected in one tournament and
