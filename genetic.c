@@ -314,3 +314,27 @@ void ga_gen_info(ga_solution_t *pop,
     *average = aux / size;
 }
 
+void ga_gen_info_unsorted(ga_solution_t *pop,
+                          size_t size,
+                          int percent_elite,
+                          int64_t *best,
+                          int64_t *average,
+                          int64_t *worst)
+{
+    if (!size)
+        return;
+
+    if (best) *best = pop[0].fitness;
+    if (worst) *worst = pop[0].fitness;
+    if (average) *average = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        if (best && pop[i].fitness < *best)
+            *best = pop[i].fitness;
+        if (worst && pop[i].fitness > *worst)
+            *worst = pop[i].fitness;
+        if (average)
+            *average += pop[i].fitness;
+    }
+    *average /= size;
+}

@@ -225,13 +225,19 @@ void gen_info(ga_solution_t *pop, int island)
     if (num_threads <= 1)
     {
         ga_select_trunc(pop, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-        ga_gen_info(pop, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
+        if (pop->generation != max_gens)
+            ga_gen_info_unsorted(pop, population_size, percent_elite, &best, &avg, &worst);
+        else 
+            ga_gen_info(pop, population_size, percent_elite, &best, &worst_elite, &avg, &worst);
     }
     else
     {
         gen = (pop + thread_bounds[island])->generation;
         ga_select_trunc(pop + thread_bounds[island], thread_bounds[island + 1] - thread_bounds[island], GA_MINIMIZE, percent_dead, percent_elite, fitness);
-        ga_gen_info(pop + thread_bounds[island], thread_bounds[island + 1] - thread_bounds[island], percent_elite, &best, &worst_elite, &avg, &worst);
+        if (pop->generation != max_gens)
+            ga_gen_info_unsorted(pop + thread_bounds[island], thread_bounds[island + 1] - thread_bounds[island], percent_elite, &best, &avg, &worst);
+        else
+            ga_gen_info(pop + thread_bounds[island], thread_bounds[island + 1] - thread_bounds[island], percent_elite, &best, &worst_elite, &avg, &worst);
     }
 
     if (csv)

@@ -76,3 +76,11 @@ void ga_gen_info(ga_solution_t *pop,
                  int64_t *average,
                  int64_t *worst);
 
+// Retrieves some fitness information about the population.
+// O(size)
+void ga_gen_info_unsorted(ga_solution_t *pop,
+                          size_t size,
+                          int percent_elite,
+                          int64_t *best,
+                          int64_t *average,
+                          int64_t *worst);
