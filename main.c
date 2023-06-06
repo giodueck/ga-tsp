@@ -261,10 +261,6 @@ void gen_info(ga_solution_t *pop, int island)
 
 int main(int argc, char **argv)
 {
-    #ifdef MPI
-    printf("MPI!\n");
-    #endif // MPI
-
     parse_args(argc, argv);
 
     if (!tsp.dim)
