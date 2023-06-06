@@ -1,10 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
 #include <unistd.h>
+
+#ifdef _OPENMP
+#include <omp.h>
+#else
+#include <pthread.h>
+#endif
 
 #include "genetic.h"
 #include "tsp_parser.h"
@@ -15,7 +20,9 @@
 
 tsp_2d_t tsp = {0};
 FILE *csv = NULL;
+#ifndef _OPENMP
 pthread_t *threads = NULL;
+#endif
 int *thread_bounds = NULL;
 struct drand48_data *rbufs = NULL;
 
@@ -250,6 +257,9 @@ void gen_info(ga_solution_t *pop, int island)
 
 int main(int argc, char **argv)
 {
+    #ifdef _OPENMP
+    printf("Using OpenMP!\n\n");
+    #endif
     parse_args(argc, argv);
 
     if (!tsp.dim)
@@ -273,7 +283,9 @@ int main(int argc, char **argv)
 
     if (num_threads > 1)
     {
+        #ifndef _OPENMP
         threads = (pthread_t *) malloc(sizeof(pthread_t) * num_threads);
+        #endif
         thread_bounds = (int *) malloc(sizeof(int) * (num_threads + 1));
 
         int low = 0;
@@ -317,6 +329,16 @@ int main(int argc, char **argv)
         struct parallel_ga_arg *args = (struct parallel_ga_arg *) malloc(sizeof(struct parallel_ga_arg) * num_threads);
         if (island_cross_interval <= 0)
         {
+            #ifdef _OPENMP
+            #pragma omp parallel for
+            for (int i = 0; i < num_threads; i++)
+            {
+                if (gen_info_interval > 0)
+                    gen_info(population, i);
+                args[i] = (struct parallel_ga_arg) { .population = population, .gens = max_gens, .low = thread_bounds[i], .high = thread_bounds[i + 1] };
+                parallel_ga(&args[i]);
+            }
+            #else
             for (int i = 0; i < num_threads; i++)
             {
                 if (gen_info_interval > 0)
@@ -324,10 +346,21 @@ int main(int argc, char **argv)
                 args[i] = (struct parallel_ga_arg) { .population = population, .gens = max_gens, .low = thread_bounds[i], .high = thread_bounds[i + 1] };
                 pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
             }
+            #endif
 
             gen = max_gens;
         } else 
         {
+            #ifdef _OPENMP
+            #pragma omp parallel for
+            for (int i = 0; i < num_threads; i++)
+            {
+                if (gen_info_interval > 0)
+                    gen_info(population, i);
+                args[i] = (struct parallel_ga_arg) { .population = population, .gens = ((max_gens - gen - island_cross_interval >= 0) ? island_cross_interval : max_gens - gen) - 1, .low = thread_bounds[i], .high = thread_bounds[i + 1], .t = i };
+                parallel_ga(&args[i]);
+            }
+            #else
             for (int i = 0; i < num_threads; i++)
             {
                 if (gen_info_interval > 0)
@@ -335,14 +368,17 @@ int main(int argc, char **argv)
                 args[i] = (struct parallel_ga_arg) { .population = population, .gens = ((max_gens - gen - island_cross_interval >= 0) ? island_cross_interval : max_gens - gen) - 1, .low = thread_bounds[i], .high = thread_bounds[i + 1], .t = i };
                 pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
             }
+            #endif
 
             gen += island_cross_interval;
         }
 
+        #ifndef _OPENMP
         for (int i = 0; i < num_threads; i++)
         {
             pthread_join(threads[i], NULL);
         }
+        #endif
         free(args);
 
         if (island_cross_interval > 0)
@@ -389,11 +425,12 @@ int main(int argc, char **argv)
     tsp_2d_free(tsp);
     if (csv)
         fclose(csv);
+    #ifndef _OPENMP
     if (threads)
-    {
         free(threads);
+    #endif
+    if (num_threads > 1)
         free(thread_bounds);
-    }
     free(rbufs);
 
     return 0;
