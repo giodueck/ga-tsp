@@ -21,11 +21,8 @@ Los parametros son:
 - Numero de generaciones
 - Tamaño de poblacion
 - Probabilidad de mutacion
-<!-- - Estrategia de seleccion (torneo o truncaciion) -->
 - Tamaño de torneo
-<!-- - Porcentaje de truncacion -->
-<!-- - Porcentaje de cruce (para truncacion) -->
-- Porcentaje de elitismo <!-- (para truncacion) -->
+- Porcentaje de elitismo
 - Cantidad de islas paralelas (poblacion dividida entre las islas)
 - Frecuencia de cruce entre islas
 - Frecuencia de impresion de estadisticas en la consola
