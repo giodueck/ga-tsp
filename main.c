@@ -8,7 +8,11 @@
 #ifdef _OPENMP
 #include <omp.h>
 #else
+ #ifdef MPI
+#include <mpi.h>
+ #else
 #include <pthread.h>
+ #endif
 #endif
 
 #include "genetic.h"
@@ -20,9 +24,13 @@
 
 tsp_2d_t tsp = {0};
 FILE *csv = NULL;
+
 #ifndef _OPENMP
+#ifndef MPI
 pthread_t *threads = NULL;
 #endif
+#endif
+
 int *thread_bounds = NULL;
 struct drand48_data *rbufs = NULL;
 
@@ -175,14 +183,6 @@ int serial_ga(ga_solution_t *population, int gens)
     int gen = population->generation;
     while (gens-- > 0)
     {
-        // if (sel_strat == SEL_TRUNCATE)
-        //     /* Sort and select elite and survivors according to the truncation selection method */
-        //     ga_select_trunc(population, population_size, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-        //
-        // if (sel_strat == SEL_TRUNCATE)
-        //     /* Replace dead population with new offspring from surviving individuals */
-        //     gen = ga_next_generation_trunc(population, population_size, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[0]);
-        // else 
         if (sel_strat == SEL_TOURNAMENT)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
@@ -206,14 +206,6 @@ void *parallel_ga(void *_arg)
     // srand48_r(arg.population->generation + arg.low, &rd);
     while (arg.gens-- > 0)
     {
-        // if (sel_strat == SEL_TRUNCATE)
-        //     /* Sort and select elite and survivors according to the truncation selection method */
-        //     ga_select_trunc(arg.population + arg.low, arg.high - arg.low, GA_MINIMIZE, percent_dead, percent_elite, fitness);
-        //
-        // if (sel_strat == SEL_TRUNCATE)
-        //     /* Replace dead population with new offspring from surviving individuals */
-        //     ga_next_generation_trunc(arg.population + arg.low, arg.high - arg.low, percent_dead, percent_cross, crossover, mutations, mutate, &rbufs[arg.t]);
-        // else
         if (sel_strat == SEL_TOURNAMENT)
             /* Do tournaments to define which solutions are selected to cross.
             If the percentage dead is half or more, all individuals reproduce.
@@ -255,12 +247,74 @@ void gen_info(ga_solution_t *pop, int island)
         printf("G: %6d:\tB: %5lu\t%3d%%: %5lu\tA: %5lu\tW: %5lu\n", gen, best, percent_elite, worst_elite, avg, worst);
 }
 
+#ifdef MPI
+#define FLAG_CONT 1
+#define FLAG_TERM 0
+
+// Send island population's genetic information to the process with ID dest_proc as an array of chars.
+// A flag char is sent first: 0 when pop is NULL, signifies the end of the program, >0 otherwise, pop is sent afterwards.
+// A 0 flag should only be sent from the master, as slaves have no knowledge of how many generations have passed.
+void send_island(int dest_proc, ga_solution_t *pop)
+{
+
+}
+
+// Receive an island population's genetic information as an array of chars from the process with ID src_proc and
+// store it in the dest array.
+// A flag char is received first: 0 signifies the end of the program, >0 signifies that the population is sent next.
+// If a 0 flag is received, the slave will terminate execution
+int receive_island(int src_proc, ga_solution_t *dest)
+{
+    
+
+    return FLAG_TERM;
+}
+
+// Slave main function, loops until receive_island returns FLAG_TERM
+void slave_main(int island_size, int proc_id, struct drand48_data *rbuf)
+{
+    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * island_size);
+    ga_solution_t *pop = (ga_solution_t *) malloc(sizeof(ga_solution_t) * island_size);
+
+    printf("Process %d in slave_main\n", proc_id);
+    while (receive_island(0, pop) != FLAG_TERM)
+    {
+
+    }
+
+    free(chromosome_chunk);
+    free(pop);
+}
+#endif //MPI
+
 int main(int argc, char **argv)
 {
+    parse_args(argc, argv);
+
     #ifdef _OPENMP
     printf("Using OpenMP!\n\n");
     #endif
-    parse_args(argc, argv);
+    #ifdef MPI
+
+    int num_procs, proc_id;
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+	MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
+
+    if (proc_id == 0)
+        printf("Using OpenMPI!\n\n");
+    if (proc_id > num_threads)
+    {
+        printf("Note: Too few islands, node %d idle.\n", proc_id);
+        MPI_Finalize();
+        return 0;
+    } 
+    if (num_threads >= num_procs)
+    {
+        printf("Error: Too few nodes, for N islands need N+1 nodes.\n");
+        exit(EXIT_FAILURE);
+    }
+    #endif
 
     if (!tsp.dim)
     {
@@ -273,18 +327,31 @@ int main(int argc, char **argv)
         // There is a bug in the deduplicated reading causing wrong fitness results.
         tsp = tsp_2d_read(argv[optind]);
     }
-    printf("Dim = %lu\n", tsp.dim);
+
+    uint32_t *chromosome_chunk;
+    ga_solution_t *population;
     
-    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * population_size);
-    ga_solution_t *population = (ga_solution_t *) malloc(sizeof(ga_solution_t) * population_size);
+    #ifdef MPI
+    if (proc_id == 0) {
+    #endif
+
+    printf("Dim = %lu\n", tsp.dim);
+    chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * population_size);
+    population = (ga_solution_t *) malloc(sizeof(ga_solution_t) * population_size);
 
     if (csv)
         fprintf(csv, "Island,Generation,Best,Elite%%,Elite,Average,Worst\n");
 
+    #ifdef MPI
+    }
+    #endif
+
     if (num_threads > 1)
     {
         #ifndef _OPENMP
+        #ifndef MPI
         threads = (pthread_t *) malloc(sizeof(pthread_t) * num_threads);
+        #endif
         #endif
         thread_bounds = (int *) malloc(sizeof(int) * (num_threads + 1));
 
@@ -299,9 +366,26 @@ int main(int argc, char **argv)
     } else 
         num_threads = 1;
 
+    #ifndef MPI
     rbufs = (struct drand48_data *) malloc(sizeof(struct drand48_data) * num_threads);
     for (int i = 0; i < num_threads; i++)
         srand48_r(rand(), &rbufs[i]);
+    #else
+    rbufs = (struct drand48_data *) malloc(sizeof(struct drand48_data));
+    srand48_r(rand() + proc_id, rbufs);
+
+    if (proc_id > 0)
+    {
+        if (num_threads > 1)
+            slave_main(thread_bounds[proc_id + 1] - thread_bounds[proc_id], proc_id, rbufs);
+        else
+            slave_main(population_size, proc_id, rbufs);
+        MPI_Finalize();
+        free(rbufs);
+
+        return 0;
+    }
+    #endif
 
     /* Initialize population */
     ga_init(population, population_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
@@ -311,6 +395,7 @@ int main(int argc, char **argv)
     /* Evolve for max_gens number of generations */
     while (gen < max_gens)
     {
+        #ifndef MPI
         /* Single-threaded */
         if (num_threads <= 1)
         {
@@ -324,6 +409,7 @@ int main(int argc, char **argv)
                 gen = serial_ga(population, max_gens);
             continue;
         }
+        #endif
 
         /* Multi-threaded */
         struct parallel_ga_arg *args = (struct parallel_ga_arg *) malloc(sizeof(struct parallel_ga_arg) * num_threads);
@@ -339,6 +425,9 @@ int main(int argc, char **argv)
                 parallel_ga(&args[i]);
             }
             #else
+            #ifdef MPI
+            // MPI code
+            #else
             for (int i = 0; i < num_threads; i++)
             {
                 if (gen_info_interval > 0)
@@ -346,6 +435,7 @@ int main(int argc, char **argv)
                 args[i] = (struct parallel_ga_arg) { .population = population, .gens = max_gens, .low = thread_bounds[i], .high = thread_bounds[i + 1] };
                 pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
             }
+            #endif
             #endif
 
             gen = max_gens;
@@ -361,6 +451,9 @@ int main(int argc, char **argv)
                 parallel_ga(&args[i]);
             }
             #else
+            #ifdef MPI
+            // MPI code
+            #else
             for (int i = 0; i < num_threads; i++)
             {
                 if (gen_info_interval > 0)
@@ -369,20 +462,30 @@ int main(int argc, char **argv)
                 pthread_create(&threads[i], NULL, parallel_ga, &args[i]);
             }
             #endif
+            #endif
 
             gen += island_cross_interval;
         }
 
+        // Cross islands
         #ifndef _OPENMP
+        #ifndef MPI
         for (int i = 0; i < num_threads; i++)
         {
             pthread_join(threads[i], NULL);
         }
         #endif
+        #endif
         free(args);
+
+        #ifdef MPI
+        // TODO MPI code
+        printf("Master in main\n");
+        #else
 
         if (island_cross_interval > 0)
             gen = serial_ga(population, 1);
+        #endif
     }
 
     /* Print last generation */
@@ -426,12 +529,17 @@ int main(int argc, char **argv)
     if (csv)
         fclose(csv);
     #ifndef _OPENMP
+    #ifndef MPI
     if (threads)
         free(threads);
+    #endif
     #endif
     if (num_threads > 1)
         free(thread_bounds);
     free(rbufs);
 
+    #ifdef MPI
+    MPI_Finalize();
+    #endif
     return 0;
 }
