@@ -1,2 +1,5 @@
 ga-tsp
+ga-tsp-mpi
 *.csv
+winner.txt
+hostfile.txt
