@@ -72,60 +72,6 @@ void ga_select_trunc(ga_solution_t *pop, size_t size, int criteria, int percent_
     }
 }
 
-// Creates the next generation by replacing dead solutions
-// mutation_chance is a number in a million (actually 1024*1024)
-// O(size)
-/* int ga_next_generation_trunc(ga_solution_t *pop,
-                             size_t size,
-                             int percent_dead,
-                             int percent_cross,
-                             void (*crossing_func)(ga_solution_t *, ga_solution_t *, ga_solution_t *, uint8_t *, struct drand48_data *),
-                             int mutation_per_Mi,
-                             void (*mutation_func)(ga_solution_t *, int, struct drand48_data *),
-                             struct drand48_data *rbuf)
-{
-    if (!size)
-        return 0;
-    
-    size_t threshold = size * percent_dead / 100;
-    if (!threshold)
-        return 0;
-    size_t cross = size * percent_cross / 100;
-    
-    uint8_t *marks = (uint8_t *) malloc(sizeof(uint8_t) * pop->chrom_len);
-
-    for (size_t i = 0; i < threshold; i++)
-        pop[i].generation++;
-    for (size_t i = threshold; i < size; i++)
-    {
-        pop[i].generation++;
-
-        // Reproduce
-        if (cross)
-        {
-            int _i = rand() % threshold, _j = rand() % threshold;
-            crossing_func(&(pop[_i]), &(pop[_j]), &(pop[i]), marks, rbuf);
-            cross--;
-        }
-        else
-        {
-            int _i = rand() % threshold;
-            memcpy(&(pop[i]), &(pop[_i]), sizeof(ga_solution_t) - sizeof(void *));
-            memcpy(pop[i].chromosome, pop[_i].chromosome, pop[_i].chrom_len * pop[_i].gene_size);
-        }
-
-        // Sometimes mutate
-        mutation_func(&(pop[i]), mutation_per_Mi, rbuf);
-    }
-
-    for (size_t i = 0; i < size && i < threshold; i++)
-        if (!pop[i].elite)
-            mutation_func(&(pop[i]), mutation_per_Mi, rbuf);
-
-    free(marks);
-    return pop->generation;
-} */
-
 // Creates tournaments of size k where the fittest individuals get to procreate, while losers
 // are replaced with offspring. If k >= 4, the parents are selected in one tournament and
 // the least fit losers are replaced with the offspring, otherwise two tournaments are held

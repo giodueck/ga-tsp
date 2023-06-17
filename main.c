@@ -193,6 +193,23 @@ int serial_ga(ga_solution_t *population, int gens)
     return gen;
 }
 
+#ifdef MPI
+int mpi_ga(ga_solution_t *population, int gens, int island_size)
+{
+    int gen = population->generation;
+    while (gens-- > 0)
+    {
+        if (sel_strat == SEL_TOURNAMENT)
+            /* Do tournaments to define which solutions are selected to cross.
+            If the percentage dead is half or more, all individuals reproduce.
+            The strongest solution stays in the population if it is not topped.*/
+            gen = ga_next_generation_tournament(population, island_size, tournament_size, GA_MINIMIZE, fitness, crossover, mutations, mutate, &rbufs[0]);
+    }
+
+    return gen;
+}
+#endif
+
 struct parallel_ga_arg {
     ga_solution_t *population;
     int gens, low, high, t;
@@ -251,6 +268,9 @@ void gen_info(ga_solution_t *pop, int island)
 #define FLAG_CONT 1
 #define FLAG_TERM 0
 
+#define FLAG_TAG  1
+#define DATA_TAG  2
+
 // Send island population's genetic information to the process with ID dest_proc as an array of chars.
 // A flag char is sent first: 0 when pop is NULL, signifies the end of the program, >0 otherwise, pop is sent afterwards.
 // A 0 flag should only be sent from the master, as slaves have no knowledge of how many generations have passed.
@@ -259,15 +279,17 @@ void send_island(int dest_proc, ga_solution_t *pop, int pop_size)
     char flag[1] = {FLAG_TERM};
     if (pop == NULL)
     {
-        MPI_Send(flag, 1, MPI_CHAR, dest_proc, 0, MPI_COMM_WORLD);
+        MPI_Send(flag, 1, MPI_CHAR, dest_proc, FLAG_TAG, MPI_COMM_WORLD);
         return;
     }
     flag[0] = FLAG_CONT;
-    MPI_Send(flag, 1, MPI_CHAR, dest_proc, 0, MPI_COMM_WORLD);
+    MPI_Send(flag, 1, MPI_CHAR, dest_proc, FLAG_TAG, MPI_COMM_WORLD);
 
+    int proc_id;
+    MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
     for (int i = 0; i < pop_size; i++)
     {
-        MPI_Send(pop->chromosome, pop->chrom_len, MPI_UINT32_T, dest_proc, 0, MPI_COMM_WORLD);
+        MPI_Send(((uint32_t*)pop->chromosome) + i, pop->chrom_len, MPI_UINT32_T, dest_proc, DATA_TAG, MPI_COMM_WORLD);
     }
 }
 
@@ -278,32 +300,40 @@ void send_island(int dest_proc, ga_solution_t *pop, int pop_size)
 int receive_island(int src_proc, ga_solution_t *dest, int pop_size)
 {
     char flag[1] = {FLAG_TERM};
-    MPI_Recv(flag, 1, MPI_CHAR, src_proc, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    MPI_Recv(flag, 1, MPI_CHAR, src_proc, FLAG_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
     if (flag[0] == FLAG_TERM)
         return FLAG_TERM;
 
+    int proc_id;
+    MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
     for (int i = 0; i < pop_size; i++)
     {
-        MPI_Recv(dest->chromosome, dest->chrom_len, MPI_UINT32_T, src_proc, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(((uint32_t*)dest->chromosome) + i, dest->chrom_len, MPI_UINT32_T, src_proc, DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     return FLAG_CONT;
 }
 
 // Slave main function, loops until receive_island returns FLAG_TERM
-void slave_main(int island_size, int proc_id, struct drand48_data *rbuf)
+void slave_main(int island_size, int proc_id, int gens)
 {
     uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * island_size);
     ga_solution_t *pop = (ga_solution_t *) malloc(sizeof(ga_solution_t) * island_size);
 
+    // int i = 0;
+    // printf("PID %d\n", getpid());
+    // while (!i)
+    //     sleep(5);
     ga_init(pop, island_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
 
     printf("Process %d in slave_main, island_size = %d\n", proc_id, island_size);
     while (receive_island(0, pop, island_size) != FLAG_TERM)
     {
         printf("slave_main:%d: FLAG_CONT\n", proc_id);
-        // TODO: Evolve
+        // Evolve
+        // if (proc_id != 3)
+        mpi_ga(pop, gens, island_size);
         // Send back to master
         send_island(0, pop, island_size);
     }
@@ -408,12 +438,13 @@ int main(int argc, char **argv)
 
     if (proc_id > 0)
     {
+        int gens = max_gens;
+        if (island_cross_interval > 0)
+            gens = island_cross_interval;
         if (num_threads > 1)
-        {
-            slave_main(thread_bounds[proc_id] - thread_bounds[proc_id - 1], proc_id, rbufs);
-        }
+            slave_main(thread_bounds[proc_id] - thread_bounds[proc_id - 1], proc_id, gens);
         else
-            slave_main(population_size, proc_id, rbufs);
+            slave_main(population_size, proc_id, gens);
         MPI_Finalize();
         free(rbufs);
         tsp_2d_free(tsp);
@@ -473,6 +504,7 @@ int main(int argc, char **argv)
             // Send islands from population array
             for (int i = 0; i < num_threads; i++)
             {
+                printf("Sending to %d, island_size = %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i]);
                 send_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
             }
 
@@ -480,7 +512,6 @@ int main(int argc, char **argv)
             for (int i = 0; i < num_threads; i++)
             {
                 receive_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
-                printf("Master received %d\n", i + 1);
             }
 
             #else
@@ -509,7 +540,20 @@ int main(int argc, char **argv)
             }
             #else
             #ifdef MPI
-            // MPI code
+            
+            // Send islands from population array
+            for (int i = 0; i < num_threads; i++)
+            {
+                printf("Sending to %d, island_size = %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i]);
+                send_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
+            }
+
+            // Receive islands, put back into population array
+            for (int i = 0; i < num_threads; i++)
+            {
+                receive_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
+            }
+
             #else
             for (int i = 0; i < num_threads; i++)
             {
