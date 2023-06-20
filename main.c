@@ -318,26 +318,21 @@ int receive_island(int src_proc, ga_solution_t *dest, int pop_size)
 // Slave main function, loops until receive_island returns FLAG_TERM
 void slave_main(int island_size, int proc_id, int gens)
 {
-    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * island_size);
-    ga_solution_t *pop = (ga_solution_t *) malloc(sizeof(ga_solution_t) * island_size);
+    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * (island_size + num_threads));
+    ga_solution_t *pop = (ga_solution_t *) malloc(sizeof(ga_solution_t) * (island_size + num_threads));
 
-    // int i = 0;
-    // printf("PID %d\n", getpid());
-    // while (!i)
-    //     sleep(5);
     ga_init(pop, island_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
 
-    printf("Process %d in slave_main, island_size = %d\n", proc_id, island_size);
+    // printf("Process %d in slave_main, island_size = %d\n", proc_id, island_size);
     while (receive_island(0, pop, island_size) != FLAG_TERM)
     {
-        printf("slave_main:%d: FLAG_CONT\n", proc_id);
+        // printf("slave_main:%d: FLAG_CONT\n", proc_id);
         // Evolve
-        // if (proc_id != 3)
         mpi_ga(pop, gens, island_size);
         // Send back to master
         send_island(0, pop, island_size);
     }
-    printf("slave_main:%d: FLAG_TERM\n", proc_id);
+    // printf("slave_main:%d: FLAG_TERM\n", proc_id);
 
     free(pop);
     free(chromosome_chunk);
@@ -377,6 +372,9 @@ int main(int argc, char **argv)
     {
         if (optind >= argc)
         {
+            #ifdef MPI
+            if (proc_id == 0)
+            #endif
             fprintf(stderr, "Usage: '%s [options] <file.tsp>'\nSee '%s -h' for help\n", argv[0], argv[0]);
             exit(EXIT_FAILURE);
         }
