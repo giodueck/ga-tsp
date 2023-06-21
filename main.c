@@ -384,8 +384,8 @@ int main(int argc, char **argv)
         tsp = tsp_2d_read(argv[optind]);
     }
 
-    uint32_t *chromosome_chunk;
-    ga_solution_t *population;
+    uint32_t *chromosome_chunk = NULL;
+    ga_solution_t *population = NULL;
     
     #ifdef MPI
     if (proc_id == 0) {
