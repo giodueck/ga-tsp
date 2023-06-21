@@ -142,3 +142,24 @@ void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf)
     }
 }
 
+void verify_tsp_solutions(ga_solution_t *sol, size_t size, struct drand48_data *rbuf)
+{
+    uint8_t *marks = (uint8_t *) malloc(sizeof(uint8_t) * sol->chrom_len);
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < sol->chrom_len; j++)
+            marks[j] = 0;
+
+        for (int j = 0; j < sol->chrom_len; j++)
+        {
+            if (marks[((uint32_t *) sol[i].chromosome)[j]])
+            {
+                generate_tsp_solution(&sol[i], 1, sol->chrom_len, sol[i].chromosome, marks);
+                break;
+            }
+            marks[((uint32_t *) sol[i].chromosome)[j]] = 1;
+        }
+    }
+    free(marks);
+}
+

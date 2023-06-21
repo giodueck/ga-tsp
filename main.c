@@ -274,7 +274,7 @@ void gen_info(ga_solution_t *pop, int island)
 // Send island population's genetic information to the process with ID dest_proc as an array of chars.
 // A flag char is sent first: 0 when pop is NULL, signifies the end of the program, >0 otherwise, pop is sent afterwards.
 // A 0 flag should only be sent from the master, as slaves have no knowledge of how many generations have passed.
-void send_island(int dest_proc, ga_solution_t *pop, int pop_size)
+void send_island(int dest_proc, ga_solution_t *pop, int from, int up_to)
 {
     char flag[1] = {FLAG_TERM};
     if (pop == NULL)
@@ -287,7 +287,7 @@ void send_island(int dest_proc, ga_solution_t *pop, int pop_size)
 
     int proc_id;
     MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
-    for (int i = 0; i < pop_size; i++)
+    for (int i = from; i < up_to; i++)
     {
         MPI_Send(((uint32_t*)pop->chromosome) + i, pop->chrom_len, MPI_UINT32_T, dest_proc, DATA_TAG, MPI_COMM_WORLD);
     }
@@ -297,7 +297,7 @@ void send_island(int dest_proc, ga_solution_t *pop, int pop_size)
 // store it in the dest array.
 // A flag char is received first: 0 signifies the end of the program, >0 signifies that the population is sent next.
 // If a 0 flag is received, the slave will terminate execution
-int receive_island(int src_proc, ga_solution_t *dest, int pop_size)
+int receive_island(int src_proc, ga_solution_t *dest, int from, int up_to)
 {
     char flag[1] = {FLAG_TERM};
     MPI_Recv(flag, 1, MPI_CHAR, src_proc, FLAG_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
@@ -307,7 +307,7 @@ int receive_island(int src_proc, ga_solution_t *dest, int pop_size)
 
     int proc_id;
     MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
-    for (int i = 0; i < pop_size; i++)
+    for (int i = from; i < up_to; i++)
     {
         MPI_Recv(((uint32_t*)dest->chromosome) + i, dest->chrom_len, MPI_UINT32_T, src_proc, DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
@@ -316,21 +316,22 @@ int receive_island(int src_proc, ga_solution_t *dest, int pop_size)
 }
 
 // Slave main function, loops until receive_island returns FLAG_TERM
-void slave_main(int island_size, int proc_id, int gens)
+void slave_main(int proc_id, int from, int up_to, int gens)
 {
-    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * (island_size + num_threads));
-    ga_solution_t *pop = (ga_solution_t *) malloc(sizeof(ga_solution_t) * (island_size + num_threads));
+    int island_size = up_to - from;
+    uint32_t *chromosome_chunk = (uint32_t *) malloc(sizeof(uint32_t) * tsp.dim * island_size);
+    ga_solution_t *pop = (ga_solution_t *) malloc(sizeof(ga_solution_t) * island_size);
 
     ga_init(pop, island_size, tsp.dim, sizeof(uint32_t), chromosome_chunk, generate_tsp_solution);
 
-    // printf("Process %d in slave_main, island_size = %d\n", proc_id, island_size);
-    while (receive_island(0, pop, island_size) != FLAG_TERM)
+    printf("Process %d in slave_main, island_size = %d, from %d up to %d\n", proc_id, island_size, from, up_to);
+    while (receive_island(0, pop, 0, island_size) != FLAG_TERM)
     {
         // printf("slave_main:%d: FLAG_CONT\n", proc_id);
         // Evolve
         mpi_ga(pop, gens, island_size);
         // Send back to master
-        send_island(0, pop, island_size);
+        send_island(0, pop, 0, island_size);
     }
     // printf("slave_main:%d: FLAG_TERM\n", proc_id);
 
@@ -440,9 +441,10 @@ int main(int argc, char **argv)
         if (island_cross_interval > 0)
             gens = island_cross_interval;
         if (num_threads > 1)
-            slave_main(thread_bounds[proc_id] - thread_bounds[proc_id - 1], proc_id, gens);
+            // While thread bounds for i = 0 would be for the first thread, the first thread here is i = 1
+            slave_main(proc_id, thread_bounds[proc_id - 1], thread_bounds[proc_id], gens - 1);
         else
-            slave_main(population_size, proc_id, gens);
+            slave_main(proc_id, 0, population_size, gens - 1);
         MPI_Finalize();
         free(rbufs);
         tsp_2d_free(tsp);
@@ -502,14 +504,14 @@ int main(int argc, char **argv)
             // Send islands from population array
             for (int i = 0; i < num_threads; i++)
             {
-                printf("Sending to %d, island_size = %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i]);
-                send_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
+                printf("Sending to %d, island_size = %d, from %d up to %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i], thread_bounds[i], thread_bounds[i+1]);
+                send_island(i + 1, population, thread_bounds[i], thread_bounds[i + 1]);
             }
 
             // Receive islands, put back into population array
             for (int i = 0; i < num_threads; i++)
             {
-                receive_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
+                receive_island(i + 1, population, thread_bounds[i], thread_bounds[i + 1]);
             }
 
             #else
@@ -542,14 +544,14 @@ int main(int argc, char **argv)
             // Send islands from population array
             for (int i = 0; i < num_threads; i++)
             {
-                printf("Sending to %d, island_size = %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i]);
-                send_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
+                printf("Sending to %d, island_size = %d, from %d up to %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i], thread_bounds[i], thread_bounds[i+1]);
+                send_island(i + 1, population, thread_bounds[i], thread_bounds[i + 1]);
             }
 
             // Receive islands, put back into population array
             for (int i = 0; i < num_threads; i++)
             {
-                receive_island(i + 1, population + thread_bounds[i], thread_bounds[i + 1] - thread_bounds[i]);
+                receive_island(i + 1, population, thread_bounds[i], thread_bounds[i + 1]);
             }
 
             #else
@@ -578,8 +580,19 @@ int main(int argc, char **argv)
         free(args);
 
         #ifdef MPI
+        verify_tsp_solutions(population, population_size, rbufs);
         // TODO MPI code
-        printf("Master in main\n");
+        // printf("Master in main\n");
+        for (int i = 0; i < population_size; i++)
+            population[i].generation += (island_cross_interval <= 0) ? max_gens : island_cross_interval - 1;
+        if (gen_info_interval > 0)
+        {
+            for (int i = 0; i < num_threads; i++)
+                gen_info(population, i);
+            printf("\n");
+        }
+        if (island_cross_interval > 0)
+            gen = serial_ga(population, 1);
         #else
 
         if (island_cross_interval > 0)
@@ -640,7 +653,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < num_threads; i++)
     {
         // Send termination signal
-        send_island(i + 1, NULL, 0);
+        send_island(i + 1, NULL, 0, 0);
     }
     MPI_Finalize();
     #endif

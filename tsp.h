@@ -20,3 +20,5 @@ void crossover(ga_solution_t *p1, ga_solution_t *p2, ga_solution_t *child, uint8
 // Apply random swaps of genes dictated by some small chance
 void mutate(ga_solution_t *sol, int per_Mi, struct drand48_data *rbuf);
 
+void verify_tsp_solutions(ga_solution_t *sol, size_t i, struct drand48_data *rbuf);
+
