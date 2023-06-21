@@ -289,7 +289,7 @@ void send_island(int dest_proc, ga_solution_t *pop, int from, int up_to)
     MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
     for (int i = from; i < up_to; i++)
     {
-        MPI_Send(((uint32_t*)pop->chromosome) + i, pop->chrom_len, MPI_UINT32_T, dest_proc, DATA_TAG, MPI_COMM_WORLD);
+        MPI_Send(((uint32_t*)pop[i].chromosome), pop->chrom_len, MPI_UINT32_T, dest_proc, DATA_TAG, MPI_COMM_WORLD);
     }
 }
 
@@ -309,7 +309,7 @@ int receive_island(int src_proc, ga_solution_t *dest, int from, int up_to)
     MPI_Comm_rank(MPI_COMM_WORLD, &proc_id);
     for (int i = from; i < up_to; i++)
     {
-        MPI_Recv(((uint32_t*)dest->chromosome) + i, dest->chrom_len, MPI_UINT32_T, src_proc, DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(((uint32_t*)dest[i].chromosome), dest->chrom_len, MPI_UINT32_T, src_proc, DATA_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 
     return FLAG_CONT;
@@ -504,7 +504,8 @@ int main(int argc, char **argv)
             // Send islands from population array
             for (int i = 0; i < num_threads; i++)
             {
-                printf("Sending to %d, island_size = %d, from %d up to %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i], thread_bounds[i], thread_bounds[i+1]);
+                // printf("Sending to %d, island_size = %d, from %d up to %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i], thread_bounds[i], thread_bounds[i+1]);
+                gen_info(population, i);
                 send_island(i + 1, population, thread_bounds[i], thread_bounds[i + 1]);
             }
 
@@ -544,7 +545,8 @@ int main(int argc, char **argv)
             // Send islands from population array
             for (int i = 0; i < num_threads; i++)
             {
-                printf("Sending to %d, island_size = %d, from %d up to %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i], thread_bounds[i], thread_bounds[i+1]);
+                // printf("Sending to %d, island_size = %d, from %d up to %d\n", i + 1, thread_bounds[i+1] - thread_bounds[i], thread_bounds[i], thread_bounds[i+1]);
+                gen_info(population, i);
                 send_island(i + 1, population, thread_bounds[i], thread_bounds[i + 1]);
             }
 
@@ -585,12 +587,7 @@ int main(int argc, char **argv)
         // printf("Master in main\n");
         for (int i = 0; i < population_size; i++)
             population[i].generation += (island_cross_interval <= 0) ? max_gens : island_cross_interval - 1;
-        if (gen_info_interval > 0)
-        {
-            for (int i = 0; i < num_threads; i++)
-                gen_info(population, i);
-            printf("\n");
-        }
+        
         if (island_cross_interval > 0)
             gen = serial_ga(population, 1);
         #else
